@@ -542,7 +542,11 @@ public class MainActivity extends Activity {
             }
             if ("server_questionnaire_status_requested".equals(eventName)) {
                 if (serverClient != null) {
-                    serverClient.loadQuestionnaireStatus();
+                    // 补填问卷时会带上要查的睡眠夜日期；不带日期时仍是默认的今天/昨晚。
+                    serverClient.loadQuestionnaireStatus(
+                            readString(payloadJson, "preDate"),
+                            readString(payloadJson, "postDate")
+                    );
                 }
                 return;
             }

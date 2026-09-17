@@ -26,6 +26,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
 /**
  * App 到睡眠枕服务器的最小网络边界。
@@ -43,6 +44,11 @@ public final class PillowServerClient {
     private static final String KEY_CURRENT_DEVICE_ID = "current_device_id";
     private static final long REMOTE_SYNC_POLL_INTERVAL_MS = 20_000L;
     private static final int MAX_QUESTIONNAIRE_IMAGE_BYTES = 10 * 1024 * 1024;
+    /**
+     * Only YYYY-MM-DD reaches the questionnaire query string. Dates arriving from WebView (used
+     * when a participant fills in a missed night) must not be able to rewrite the request.
+     */
+    private static final Pattern QUESTIONNAIRE_DATE_KEY = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
 
     public interface Listener {
         void onServerEvent(String eventName, JSONObject payload);
@@ -175,13 +181,24 @@ public final class PillowServerClient {
      * next-morning response belongs to yesterday's bedtime date; PSQI stays experiment-wide.
      */
     public void loadQuestionnaireStatus() {
+        loadQuestionnaireStatus(null, null);
+    }
+
+    /**
+     * Loads completion state for one chosen sleep night.  Parameters may be omitted (null or
+     * blank), in which case the current night is used.  Filling in a missed diary entry passes
+     * that earlier date so the App can tell whether the night was already recorded.
+     */
+    public void loadQuestionnaireStatus(String preDate, String postDate) {
         if (!hasSession()) return;
+        final String requestedPreDate = isQuestionnaireDateKey(preDate) ? preDate.trim() : formatChinaDate(0);
+        final String requestedPostDate = isQuestionnaireDateKey(postDate) ? postDate.trim() : formatChinaDate(-1);
         executor.execute(() -> {
             try {
                 JSONObject response = request(
                         "GET",
-                        "/api/v1/me/questionnaires?preDate=" + formatChinaDate(0)
-                                + "&postDate=" + formatChinaDate(-1),
+                        "/api/v1/me/questionnaires?preDate=" + requestedPreDate
+                                + "&postDate=" + requestedPostDate,
                         null,
                         accessToken()
                 );
@@ -190,6 +207,10 @@ public final class PillowServerClient {
                 emit("server_questionnaire_error", message(readableError(error)));
             }
         });
+    }
+
+    private static boolean isQuestionnaireDateKey(String value) {
+        return value != null && QUESTIONNAIRE_DATE_KEY.matcher(value.trim()).matches();
     }
 
     /** Stores a completed App questionnaire without exposing the login token to WebView JavaScript. */

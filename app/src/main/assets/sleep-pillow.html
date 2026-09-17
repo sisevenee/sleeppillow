@@ -93,6 +93,7 @@ h1,h2,h3,p{margin-top:0}h1{font-size:30px;margin-bottom:6px}h2{font-size:18px;ma
 .badge{font-size:10px;padding:5px 8px;border-radius:99px;background:rgba(255,192,93,.13);color:#ffd894}.badge.done{background:rgba(57,213,141,.13);color:#a4f1cf}
 .qcard p{color:var(--muted);font-size:11px;margin:8px 0 12px}.question{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid rgba(36,75,122,.7)}.question:last-child{border-bottom:0}
 .survey-card{border:1px solid var(--line);border-radius:18px;padding:15px;background:rgba(16,42,82,.82)}.survey-card+.survey-card{margin-top:10px}.survey-card .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.survey-card p{color:var(--muted);font-size:11px;line-height:1.55;margin:8px 0 12px}.survey-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.survey-actions a,.survey-actions button{min-height:42px;border-radius:13px;font-weight:700;text-decoration:none;display:grid;place-items:center;font-size:12px}.survey-actions a{background:linear-gradient(90deg,#3569ff,#8b4dff);color:#fff}.survey-actions button{border:1px solid var(--line);background:#0d254d;color:var(--text)}.survey-actions button.done{background:rgba(57,213,141,.12);border-color:rgba(57,213,141,.45);color:#a4f1cf}.survey-frequency{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.survey-frequency span{border:1px solid rgba(36,75,122,.72);border-radius:99px;padding:5px 8px;color:var(--muted);font-size:10px;background:rgba(10,31,64,.55)}
+.backfill-panel{margin-top:12px;padding:13px;border:1px solid rgba(36,75,122,.72);border-radius:15px;background:rgba(10,31,64,.56);display:grid;gap:10px}.backfill-panel[hidden]{display:none}.backfill-line{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px}.backfill-line label{font-size:12px;color:var(--muted)}.backfill-line input{min-height:38px;border:1px solid var(--line);border-radius:11px;background:#0d254d;color:var(--text);padding:0 10px}.backfill-panel button{min-height:42px;border-radius:13px;border:1px solid var(--line);background:#0d254d;color:var(--text);font-size:12px;font-weight:700}.backfill-panel button:disabled{opacity:.5}
 .questionnaire-form{display:grid;gap:14px}.questionnaire-form .question{padding-bottom:15px;border-bottom:1px solid rgba(36,75,122,.72)}.questionnaire-form .question:last-child{border-bottom:0;padding-bottom:0}.questionnaire-form label.question-label{display:block;color:var(--text);font-size:14px;line-height:1.55;margin-bottom:9px}.questionnaire-form .question-help{display:block;color:var(--muted);font-size:11px;margin-top:-5px;margin-bottom:9px}.questionnaire-form input:not([type=radio]),.questionnaire-form select,.questionnaire-form textarea{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;background:#0d254d;color:var(--text);padding:10px 12px}.questionnaire-form input[type=file]{padding:7px;font-size:12px}.questionnaire-form input[type=file]::file-selector-button{border:0;border-radius:8px;background:#3569ff;color:#fff;padding:8px 10px;margin-right:9px;font:inherit}.questionnaire-form textarea{min-height:82px;resize:vertical}.questionnaire-form .options{grid-template-columns:1fr}.questionnaire-form .option{font-size:12px;line-height:1.4}.questionnaire-form .option input{flex:0 0 auto}
 .options{display:grid;gap:8px}.option{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#0d254d}.option input{accent-color:var(--blue)}
 .profile-head{display:flex;align-items:center;gap:15px;padding:18px}.avatar{width:76px;height:76px;border-radius:50%;background:linear-gradient(145deg,#7288c5,#2f467d);display:grid;place-items:center;font-size:30px;font-weight:700}
@@ -733,6 +734,13 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
     <div class="survey-actions" style="grid-template-columns:1fr">
       <button type="button" data-questionnaire-form="pre_sleep">填写今日睡前问卷</button>
     </div>
+    <!-- 补填入口默认收起：日常流程仍然只点一次主按钮，漏填时才展开选日期。 -->
+    <button class="linkbtn" id="preSleepBackfillToggle" type="button" style="margin-top:10px;text-align:left">忘记填写？补填往日睡前问卷</button>
+    <div class="backfill-panel" id="preSleepBackfillPanel" hidden>
+      <div class="backfill-line"><label for="preSleepBackfillDate">补填哪一晚</label><input id="preSleepBackfillDate" type="date"></div>
+      <p class="muted small" id="preSleepBackfillStatus" style="margin:0"></p>
+      <button type="button" id="preSleepBackfillStart">填写该晚睡前问卷</button>
+    </div>
   </section>
   <section class="survey-card">
     <div class="top"><h2>醒后填写</h2><span class="badge" id="dailyTwoBadge">昨夜</span></div>
@@ -740,6 +748,12 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
     <div class="survey-frequency"><span>每天 1 次</span><span>醒后填写</span><span>归入昨夜</span></div>
     <div class="survey-actions" style="grid-template-columns:1fr">
       <button type="button" data-questionnaire-form="post_wake">填写昨夜醒后问卷</button>
+    </div>
+    <button class="linkbtn" id="postWakeBackfillToggle" type="button" style="margin-top:10px;text-align:left">忘记填写？补填往日醒后问卷</button>
+    <div class="backfill-panel" id="postWakeBackfillPanel" hidden>
+      <div class="backfill-line"><label for="postWakeBackfillDate">补填哪一晚</label><input id="postWakeBackfillDate" type="date"></div>
+      <p class="muted small" id="postWakeBackfillStatus" style="margin:0"></p>
+      <button type="button" id="postWakeBackfillStart">填写该晚醒后问卷</button>
     </div>
   </section>
   <div class="section-title"><h2>实验量表</h2></div>
@@ -1491,18 +1505,32 @@ function onServerEvent(eventName,payloadJson){
   return
  }
  if(eventName==='server_questionnaire_status'){
-  serverQuestionnaireStatus={};
-  (Array.isArray(data.items)?data.items:[]).forEach(item=>{if(item&&item.questionnaireType)serverQuestionnaireStatus[item.questionnaireType]=item});
+  const items=Array.isArray(data.items)?data.items:[];
+  // 回包带回查询用的睡眠夜：等于今天/昨夜时是首页状态，否则是补填查询的结果。
+  if(data.preSleepDate===todayKey()&&data.postWakeDate===yesterdayKey()){
+   serverQuestionnaireStatus={};
+   items.forEach(item=>{if(item&&item.questionnaireType)serverQuestionnaireStatus[item.questionnaireType]=item})
+  }else{
+   // 用户又改了日期时，先前那次查询的迟到回包必须丢弃，否则会显示成另一个日期的状态。
+   if(backfillQueryState==='pending'&&data.preSleepDate!==pendingBackfillQuery)return;
+   backfillQuestionnaireStatus={};
+   items.forEach(item=>{if(item&&item.questionnaireType)backfillQuestionnaireStatus[item.questionnaireType]=item});
+   if(isValidDateKey(data.preSleepDate)){pendingBackfillQuery=data.preSleepDate;backfillQueryState='done';clearTimeout(backfillQueryTimer)}
+  }
   updateSurveyBadges();
   return
  }
  if(eventName==='server_questionnaire_submitted'){
   pendingQuestionnaireSubmission=null;
-  if(data.questionnaireType)serverQuestionnaireStatus[data.questionnaireType]=data;
+  const submittedDate=data.responseDate||'';
+  // PSQI 不按日期归档；每日问卷只有回到默认睡眠夜时才算今天的完成状态。
+  const isDefaultNight=data.questionnaireType==='psqi_before'||data.questionnaireType==='psqi_after'?true:submittedDate===defaultResponseDate(data.questionnaireType);
+  if(data.questionnaireType&&isDefaultNight)serverQuestionnaireStatus[data.questionnaireType]=data;
+  else if(data.questionnaireType&&isValidDateKey(submittedDate)){backfillQuestionnaireStatus[data.questionnaireType]=data;pendingBackfillQuery=submittedDate;backfillQueryState='done'}
   updateSurveyBadges();
-  byId('questionnaireSubmitStatus').textContent='已提交并同步到管理员后台。';
+  byId('questionnaireSubmitStatus').textContent=isDefaultNight?'已提交并同步到管理员后台。':'已补填 '+submittedDate+' 的问卷，并同步到管理员后台。';
   byId('questionnaireSubmit').disabled=false;
-  toast('问卷已提交');
+  toast(isDefaultNight?'问卷已提交':'已补填 '+submittedDate+' 的问卷');
   setTimeout(()=>open('questionnaires',true),500);
   return
  }
@@ -2071,8 +2099,27 @@ byId('allowBackgroundReminder').addEventListener('click',()=>notifyNative('quest
 function chinaDateKey(offsetDays=0){const fields={};const instant=new Date(Date.now()+offsetDays*24*60*60*1000);new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(instant).forEach(part=>{fields[part.type]=part.value});return fields.year+'-'+fields.month+'-'+fields.day}
 function todayKey(){return chinaDateKey()}
 function yesterdayKey(){return chinaDateKey(-1)}
+
+// 补填只允许回溯固定天数：既能救回偶尔忘填的一两晚，又不会把日期误填到实验开始前。
+const QUESTIONNAIRE_BACKFILL_DAYS=7;
+function isValidDateKey(value){return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value.trim())}
+// 睡前问卷归档“今晚”，醒后问卷归档“昨晚”，这是每日睡眠日记的默认睡眠夜。
+function defaultResponseDate(type){return type==='post_wake'?yesterdayKey():todayKey()}
+// 醒后问卷描述的是已经过去的睡眠夜，所以它最早/最晚都只能到昨夜。
+function backfillRange(type){return{min:chinaDateKey(-QUESTIONNAIRE_BACKFILL_DAYS),max:type==='post_wake'?yesterdayKey():todayKey()}}
 const surveyTypeByKey={'psqi-before':'psqi_before','psqi-after':'psqi_after','daily-one':'pre_sleep','daily-two':'post_wake'};
 let serverQuestionnaireStatus={};let activeQuestionnaireType='';let pendingQuestionnaireSubmission=null;
+// 正在填写的问卷对应的睡眠夜：默认是今晚/昨夜，补填时是用户选中的日期。
+let activeResponseDate='';
+// 补填查询的提交状态单独存放，避免把补填日期的结果覆盖到首页的今晚/昨夜状态上。
+let backfillQuestionnaireStatus={};
+let pendingBackfillQuery='';
+let backfillQueryState='idle';
+let backfillQueryTimer=null;
+const backfillPanels={
+ pre_sleep:{panel:'preSleepBackfillPanel',date:'preSleepBackfillDate',status:'preSleepBackfillStatus',start:'preSleepBackfillStart',toggle:'preSleepBackfillToggle',label:'睡前'},
+ post_wake:{panel:'postWakeBackfillPanel',date:'postWakeBackfillDate',status:'postWakeBackfillStatus',start:'postWakeBackfillStart',toggle:'postWakeBackfillToggle',label:'醒后'}
+};
 
 // 问卷题目由当前问卷星表单逐题转录。答案同时带着题干保存，管理员无需依赖 App 版本也能阅读历史记录。
 const frequencyOptions=['从未发生','每周≤1次','每周1–2次','每周≥3次'];
@@ -2115,6 +2162,40 @@ const psqiQuestions=[
 ];
 questionnaireDefinitions.psqi_before.questions=psqiQuestions;questionnaireDefinitions.psqi_after.questions=psqiQuestions;questionnaireDefinitions.pre_sleep.questions=preSleepQuestions;questionnaireDefinitions.post_wake.questions=postWakeQuestions;
 
+// 补填面板：默认收起，展开后选日期 -> 查询该晚是否已填 -> 进入同一份问卷。
+function toggleBackfillPanel(type){
+ const config=backfillPanels[type];if(!config)return;
+ const panel=byId(config.panel);
+ panel.hidden=!panel.hidden;
+ byId(config.toggle).textContent=panel.hidden?'忘记填写？补填往日'+config.label+'问卷':'收起补填';
+ if(!panel.hidden)refreshBackfillPanel(type)
+}
+function requestBackfillStatus(type){
+ const config=backfillPanels[type];if(!config)return;
+ const chosen=byId(config.date).value;
+ if(!isValidDateKey(chosen))return;
+ pendingBackfillQuery=chosen;backfillQuestionnaireStatus={};backfillQueryState='pending';
+ clearTimeout(backfillQueryTimer);
+ // 未登录或离线时不会有状态回包，超时后退回“可直接填写”，不让界面卡在查询中。
+ backfillQueryTimer=setTimeout(()=>{if(backfillQueryState==='pending'){backfillQueryState='failed';refreshBackfillPanel(type)}},8000);
+ notifyNative('server_questionnaire_status_requested',{preDate:chosen,postDate:chosen});
+ refreshBackfillPanel(type)
+}
+function refreshBackfillPanel(type){
+ const config=backfillPanels[type];if(!config)return;
+ const input=byId(config.date),range=backfillRange(type);
+ input.min=range.min;input.max=range.max;
+ if(!isValidDateKey(input.value))input.value=range.max;
+ const chosen=input.value,button=byId(config.start),status=byId(config.status);
+ button.textContent='填写 '+chosen+' '+config.label+'问卷';
+ const submission=pendingBackfillQuery===chosen&&backfillQueryState==='done'?backfillQuestionnaireStatus[type]:null;
+ if(pendingBackfillQuery!==chosen)status.textContent='选择日期后会先查询该晚的填写情况。';
+ else if(backfillQueryState==='pending')status.textContent='正在查询该日期的填写情况…';
+ else if(backfillQueryState==='failed')status.textContent='未能获取该日期的填写情况，可直接填写后提交。';
+ else status.textContent=submission?'该日期已填写，继续填写会覆盖更新。':'该日期尚未填写。'
+}
+function updateBackfillPanels(){Object.keys(backfillPanels).forEach(refreshBackfillPanel)}
+
 function isSurveyDone(key){
  const type=surveyTypeByKey[key],submission=serverQuestionnaireStatus[type];
  // PSQI 前后测跨实验周期有效；睡前与醒后都比较本次睡眠夜的日期。
@@ -2128,6 +2209,7 @@ function updateSurveyBadges(){
  document.querySelectorAll('[data-questionnaire-form]').forEach(button=>{const formType=button.dataset.questionnaireForm;const done=formType==='pre_sleep'?oneDone:formType==='post_wake'?twoDone:Boolean(serverQuestionnaireStatus[formType]);button.classList.toggle('done',done);const labels={psqi_before:['填写实验前测','重新填写前测'],psqi_after:['填写实验后测','重新填写后测'],pre_sleep:['填写 '+todayKey()+' 睡前问卷','重新填写 '+todayKey()+' 睡前问卷'],post_wake:['填写 '+yesterdayKey()+' 醒后问卷','重新填写 '+yesterdayKey()+' 醒后问卷']};button.textContent=(labels[formType]||['填写问卷','重新填写问卷'])[done?1:0]});
  // 原生层保存完成状态，系统提醒才能在 App 未运行时跳过已填的每日问卷。
  notifyNative('questionnaire_completion_changed',{type:'bed',date:todayKey(),completed:oneDone});notifyNative('questionnaire_completion_changed',{type:'morning',date:yesterdayKey(),completed:twoDone});
+ updateBackfillPanels();
 }
 
 function createQuestionField(question){
@@ -2150,11 +2232,24 @@ function updateQuestionnaireConditionalFields(){
  })
 }
 
-function openQuestionnaireForm(type){
- const definition=questionnaireDefinitions[type];if(!definition)return;pendingQuestionnaireSubmission=null;activeQuestionnaireType=type;const hasSubmission=type==='pre_sleep'?isSurveyDone('daily-one'):type==='post_wake'?isSurveyDone('daily-two'):Boolean(serverQuestionnaireStatus[type]);byId('questionnaireFormTitle').textContent=definition.title;byId('questionnaireFormDescription').textContent=definition.description;byId('questionnaireSubmitStatus').textContent='';const fields=byId('questionnaireFields');fields.replaceChildren();definition.questions.forEach(question=>fields.append(createQuestionField(question)));updateQuestionnaireConditionalFields();byId('questionnaireSubmit').disabled=false;byId('questionnaireSubmit').textContent=hasSubmission?'更新并重新提交':'提交问卷';open('questionnaire-form')
+function openQuestionnaireForm(type,responseDate){
+ const definition=questionnaireDefinitions[type];if(!definition)return;pendingQuestionnaireSubmission=null;activeQuestionnaireType=type;
+ // 补填时用用户选中的睡眠夜，未指定时仍是今晚/昨夜，主流程行为不变。
+ const defaultDate=defaultResponseDate(type);
+ activeResponseDate=isValidDateKey(responseDate)?responseDate.trim():defaultDate;
+ const isBackfill=activeResponseDate!==defaultDate;
+ const hasSubmission=isBackfill
+  ?(pendingBackfillQuery===activeResponseDate&&Boolean(backfillQuestionnaireStatus[type]))
+  :(type==='pre_sleep'?isSurveyDone('daily-one'):type==='post_wake'?isSurveyDone('daily-two'):Boolean(serverQuestionnaireStatus[type]));
+ byId('questionnaireFormTitle').textContent=definition.title;
+ byId('questionnaireFormDescription').textContent=isBackfill?'正在补填 '+activeResponseDate+' 睡眠夜的问卷。'+definition.description:definition.description;byId('questionnaireSubmitStatus').textContent='';const fields=byId('questionnaireFields');fields.replaceChildren();definition.questions.forEach(question=>fields.append(createQuestionField(question)));
+ // 睡前/醒后表单里的“实验日期”必须跟随所选睡眠夜，否则答案会和归档日期互相矛盾。
+ const experimentDate=fields.querySelector('[name="experiment_date"]');
+ if(experimentDate){experimentDate.value=activeResponseDate;const box=experimentDate.closest('.question');const help=box?box.querySelector('.question-help'):null;if(help)help.textContent='请填写本次睡眠夜的日期（'+activeResponseDate+'）'}
+ updateQuestionnaireConditionalFields();byId('questionnaireSubmit').disabled=false;byId('questionnaireSubmit').textContent=hasSubmission?'更新并重新提交':'提交问卷';open('questionnaire-form')
 }
 
-function answerResponseDate(){return activeQuestionnaireType==='post_wake'?yesterdayKey():todayKey()}
+function answerResponseDate(){return isValidDateKey(activeResponseDate)?activeResponseDate:defaultResponseDate(activeQuestionnaireType)}
 function submitActiveQuestionnaire(event){
  event.preventDefault();const definition=questionnaireDefinitions[activeQuestionnaireType];if(!definition)return;const form=byId('questionnaireForm');if(!form.reportValidity())return;
  const answers={};let imageQuestion=null;definition.questions.forEach(question=>{const chosen=form.querySelector('[name="'+question.id+'"]:checked');const control=chosen||form.querySelector('[name="'+question.id+'"]');if(!control||control.disabled)return;if(question.type==='image'){imageQuestion=question;return}answers[question.id]={question:question.label,value:control.value}});
@@ -2168,6 +2263,16 @@ function submitActiveQuestionnaire(event){
  byId('questionnaireSubmitStatus').textContent='正在提交到服务器…';notifyNative('server_questionnaire_submit',{questionnaireType:activeQuestionnaireType,responseDate,answers});
 }
 document.querySelectorAll('[data-questionnaire-form]').forEach(button=>button.addEventListener('click',()=>openQuestionnaireForm(button.dataset.questionnaireForm)));byId('questionnaireForm').addEventListener('submit',submitActiveQuestionnaire);
+// 补填入口：展开、选日期、按该日期进入同一份问卷。日期区间在提交前再校验一次，避免手改输入值绕过限制。
+Object.keys(backfillPanels).forEach(type=>{
+ byId(backfillPanels[type].toggle).addEventListener('click',()=>toggleBackfillPanel(type));
+ byId(backfillPanels[type].date).addEventListener('change',()=>requestBackfillStatus(type));
+ byId(backfillPanels[type].start).addEventListener('click',()=>{
+  const chosen=byId(backfillPanels[type].date).value,range=backfillRange(type);
+  if(!isValidDateKey(chosen)||chosen<range.min||chosen>range.max){toast('请选择 '+range.min+' 至 '+range.max+' 之间的日期');return}
+  openQuestionnaireForm(type,chosen)
+ })
+});
 byId('bedReminder').value=localStorage.getItem('sleep-pillow-bed-reminder')||byId('bedReminder').value;
 byId('morningReminder').value=localStorage.getItem('sleep-pillow-morning-reminder')||byId('morningReminder').value;
 updateSurveyBadges();

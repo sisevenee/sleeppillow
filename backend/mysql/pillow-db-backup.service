@@ -1,0 +1,14 @@
+[Unit]
+Description=Logical backup of the pillow MySQL database
+Documentation=file:/home/ubuntu/pillow-lqdw/backend/mysql/README.md
+After=mysql.service
+Wants=mysql.service
+
+[Service]
+Type=oneshot
+# Runs as root on purpose: mysqldump authenticates as root@localhost over the
+# unix socket, and /var/backups/pillow is root-only.
+ExecStart=/usr/local/bin/pillow-db-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

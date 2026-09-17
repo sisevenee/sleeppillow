@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the pillow database backup every night
+
+[Timer]
+# Nightly, well clear of midnight so the "1st of month" snapshot is unambiguous.
+OnCalendar=*-*-* 03:30:00
+# Persistent=true replays a missed run after downtime, so a reboot at 03:30
+# cannot silently cost a day of backups.
+Persistent=true
+RandomizedDelaySec=600
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

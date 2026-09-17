@@ -99,6 +99,39 @@ a timezone, for example `2026-09-08T15:30:00+08:00`.
 Uploading the same device/timestamp again updates that record instead of
 creating a duplicate. This makes later SD-based retry and backfill safe.
 
+## Database backups
+
+`deploy-backup.sh` installs a nightly logical backup and runs one immediately:
+
+```bash
+sudo backend/mysql/deploy-backup.sh            # install + back up now
+sudo backend/mysql/deploy-backup.sh --verify   # also restore-test the result
+```
+
+It installs `pillow-db-backup.sh` to `/usr/local/bin/`, plus
+`pillow-db-backup.service` and `pillow-db-backup.timer` to
+`/etc/systemd/system/`. The timer runs at 03:30 China time with
+`Persistent=true`, so a missed run is replayed after downtime.
+
+Backups are written to `/var/backups/pillow` as `pillow-YYYYMMDD-HHMMSS.sql.gz`,
+owned by root with mode 640. Each dump is checked with `gzip -t` and for the
+`Dump completed` trailer before it replaces the previous file, so a truncated
+dump is never left behind. Retention keeps 30 daily files plus one snapshot per
+month for 12 months. `--verify-restore` imports the newest dump into a scratch
+database `pillow_restorecheck`, compares `COUNT(*)` for every base table against
+the live database, and then drops the scratch database.
+
+```bash
+systemctl list-timers pillow-db-backup.timer     # next scheduled run
+journalctl -u pillow-db-backup.service -n 20     # last run
+tail -n 40 /var/log/pillow-db-backup.log         # full history
+gzip -dc /var/backups/pillow/<file>.sql.gz | sudo mysql pillow   # restore
+```
+
+Note that `/var/backups/pillow` lives on the same disk as the database. It
+protects against operator error and bad writes, not against losing the host
+itself; copy the dumps off the machine periodically.
+
 ## CSV comparison export
 
 The MySQL database is the server's canonical store. To create a readable CSV

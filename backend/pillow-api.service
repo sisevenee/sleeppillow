@@ -1,0 +1,25 @@
+[Unit]
+Description=Sleep Pillow telemetry API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pillowapi
+Group=pillowapi
+EnvironmentFile=/home/ubuntu/pillow-lqdw/secrets/pillow-api.env
+ExecStart=/usr/bin/python3 /opt/pillow-api/pillow_api.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pillow-api
+# Project files remain under /home/ubuntu/pillow-lqdw.  systemd exposes only
+# these narrow mounts to the service, without broadening home-directory access.
+BindReadOnlyPaths=/home/ubuntu/pillow-lqdw/backend:/opt/pillow-api
+BindPaths=/home/ubuntu/pillow-lqdw/data/sqlite:/var/lib/pillow-api
+
+[Install]
+WantedBy=multi-user.target

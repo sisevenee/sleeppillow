@@ -1,0 +1,5 @@
+plugins {
+    // Android 应用插件只在根工程声明版本，真正使用放到 app/build.gradle。
+    // 这样多个模块共用同一个插件版本，升级时只改这一处。
+    id("com.android.application") version "8.7.3" apply false
+}

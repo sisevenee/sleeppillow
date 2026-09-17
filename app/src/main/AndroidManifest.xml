@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Manifest 是 Android App 的总登记表：
+        这里声明权限、硬件能力、App 名称、图标、主题和入口页面。
+    -->
+
+    <!-- WebView 当前加载本地 assets 文件；以后如果页面或接口访问网络，就需要 INTERNET。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 问卷提醒使用 Android 系统通知；Android 13 及以上还会在运行时向用户申请此权限。 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 重启后恢复问卷提醒；精确定时不可用时会自动退化为省电模式下的普通定时任务。 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 用户开启后台提醒后，允许系统在省电模式中保留本 App 的定时问卷通知。 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- Android 11 及以下的传统蓝牙权限。maxSdkVersion=30 表示只给旧系统使用。 -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+
+    <!-- Android 6 到 Android 11 扫描 BLE 设备时通常还需要定位权限。 -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+
+    <!-- Android 12 及以上把蓝牙扫描和连接拆成了独立权限。 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- 后续 Wi-Fi 配网/状态展示会用到。真实配网仍建议通过 BLE 把 SSID/密码发给 ESP32。 -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- 声明 App 面向带 BLE 的设备。若以后想让无蓝牙模拟器也能安装，可改成 required="false"。 -->
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+
+    <!-- App 的基础配置：备份、图标、名称、主题等。 -->
+    <application
+        android:allowBackup="true"
+        android:usesCleartextTraffic="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SleepPillow">
+
+        <!-- 开发测试期服务器使用公网 HTTP IP；正式发放 App 前必须删除此项并改用 HTTPS。 -->
+
+        <!-- MainActivity 是当前唯一页面，也是启动入口。 -->
+        <!-- exported=true 允许系统桌面通过 MAIN/LAUNCHER 启动它。 -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <!-- MAIN + LAUNCHER 表示这个 Activity 会显示在桌面启动器里。 -->
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 闹钟触发、设备重启和时区变化后，恢复本地问卷提醒。 -->
+        <receiver
+            android:name=".notifications.QuestionnaireReminderReceiver"
+            android:exported="true">
+            <intent-filter>
+                <!-- Explicit AlarmManager broadcasts also declare their action here for device compatibility. -->
+                <action android:name="com.sleeppillow.app.action.QUESTIONNAIRE_REMINDER" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

@@ -1,0 +1,24 @@
+[Unit]
+Description=Sleep Pillow multi-device telemetry API
+After=network-online.target mysql.service
+Wants=network-online.target
+Requires=mysql.service
+
+[Service]
+Type=simple
+User=pillowapi
+Group=pillowapi
+EnvironmentFile=/home/ubuntu/pillow-lqdw/secrets/pillow-api-mysql.env
+# Source code stays in the project directory; systemd reads it directly instead of a stale /opt copy.
+WorkingDirectory=/home/ubuntu/pillow-lqdw/backend/mysql
+ExecStart=/usr/bin/python3 /home/ubuntu/pillow-lqdw/backend/mysql/pillow_api_mysql.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# The API needs to read its project source and its environment file, never write under /home.
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

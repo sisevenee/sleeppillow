@@ -1,0 +1,25 @@
+pluginManagement {
+    // Gradle 插件仓库：Android Gradle Plugin 会从 google()/mavenCentral() 下载。
+    // 以后如果同步失败，优先检查这里的网络访问是否正常。
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    // FAIL_ON_PROJECT_REPOS 表示依赖仓库统一写在这里，子模块里不要各写各的仓库。
+    // 好处是工程结构简单，后期多人开发时也更容易排查依赖来源。
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Android Studio 左上角显示的工程名。
+rootProject.name = "SleepPillow"
+
+// 当前只有一个 App 模块。后面如果拆出算法库、蓝牙库，可以继续 include 其他模块。
+include ":app"

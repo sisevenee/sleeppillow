@@ -1,0 +1,30 @@
+# ============================================================
+# 换行符统一规则
+#
+# 为什么必须有这个文件：
+#   开发在 Windows、部署在 Linux，而 Git for Windows 的系统级
+#   默认 core.autocrlf=true，会把 .sh 检出成 CRLF，导致服务器上
+#   报 "bad interpreter: /bin/bash^M"，很难排查。
+#
+# 策略：仓库和工作区一律 LF；只有 Windows 批处理用 CRLF。
+# ============================================================
+
+* text=auto eol=lf
+
+# Windows 批处理必须 CRLF，否则部分系统下无法执行
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制，禁止任何换行符转换
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.jar   binary
+*.apk   binary
+*.aab   binary
+*.zip   binary
+*.so    binary
+*.ttf   binary
+*.pyc   binary

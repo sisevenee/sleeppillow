@@ -1,0 +1,37 @@
+plugins {
+    // 说明这个模块会被打包成 Android App，也就是最终安装到手机里的 APK。
+    id("com.android.application")
+}
+
+android {
+    // namespace 是代码和资源生成时使用的包名，通常和 applicationId 保持一致。
+    namespace = "com.sleeppillow.app"
+
+    // compileSdk 表示用哪个 Android SDK 编译。它不等于最低可运行系统版本。
+    compileSdk = 35
+
+    defaultConfig {
+        // applicationId 是手机里真正识别这个 App 的唯一 ID。
+        // 后面如果要上架或发正式包，尽量不要随便改。
+        applicationId = "com.sleeppillow.app"
+
+        // minSdk 23 表示 Android 6.0 及以上可以安装。
+        // BLE 权限在不同系统版本上差别较大，代码里会按版本分别处理。
+        minSdk = 23
+
+        // targetSdk 表示我们按 Android 15 的行为规则适配。
+        targetSdk = 35
+
+        // versionCode 给系统和商店判断升级用，每发布一个新包都要递增。
+        versionCode = 14
+
+        // versionName 是给用户看的版本号。
+        versionName = "0.3.3"
+    }
+
+    compileOptions {
+        // 使用 Java 17 语法/字节码目标，和新版 Android Studio 自带 JDK 更匹配。
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

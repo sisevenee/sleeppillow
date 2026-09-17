@@ -1,0 +1,2242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07172f">
+<title>睡眠枕 App V3.0</title>
+<style>
+/*
+  CSS 阅读提示：
+  - :root 里放全局颜色、字体和安全区变量。
+  - .view / .card / .bottom 等是通用组件样式，多数页面都会复用。
+  - body.theme-day 是日间版覆写样式，只在切换到日间版时生效。
+  - body.font-large / body.elder-mode 是辅助可读性和适老化模式。
+*/
+:root{
+  --bg:#06142a;--bg2:#0a1f41;--card:#102a52;--card2:#14335f;--line:#244b7a;
+  --text:#f7f9ff;--muted:#94a9c9;--blue:#4f7cff;--purple:#8d5cff;--cyan:#42d6ef;
+  --green:#39d58d;--red:#ff6d7d;--amber:#ffc05d;
+  /* 底部安全区：避免 App 底栏被手机手势条或系统导航栏遮住。
+     Android 原生层会把真实导航栏高度写入 --android-safe-bottom；网页单独预览时用 22px 兜底。 */
+  --safe:max(env(safe-area-inset-bottom,0px),var(--android-safe-bottom,22px));
+  font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+}
+/* 基础重置：让所有元素按同一套盒模型计算尺寸，去掉浏览器默认外边距。 */
+*{box-sizing:border-box} html,body{margin:0;min-height:100%;background:#e5e9ef;color:var(--text)}
+[hidden]{display:none!important}
+button,input,select,textarea{font:inherit}button{color:inherit;cursor:pointer}
+/* App 外壳：限制最大宽度，模拟手机屏幕，并设置夜间版背景。 */
+.app{
+  width:min(100%,430px);min-height:100dvh;margin:0 auto;position:relative;overflow:hidden;
+  background:
+    radial-gradient(circle at 78% 4%,rgba(72,115,255,.18),transparent 22%),
+    linear-gradient(180deg,#081d40 0%,#06142a 48%,#041022 100%);
+  box-shadow:0 18px 60px rgba(0,0,0,.24)
+}
+/* 顶部天空背景，只是装饰，不参与布局。 */
+.sky{
+  position:absolute;left:0;right:0;top:0;height:210px;pointer-events:none;opacity:.95;
+  background:
+    radial-gradient(circle at 79% 22%,#fff 0 11px,transparent 12px),
+    radial-gradient(circle at 15% 18%,rgba(255,255,255,.8) 0 1px,transparent 2px),
+    radial-gradient(circle at 43% 10%,rgba(255,255,255,.5) 0 1px,transparent 2px),
+    radial-gradient(circle at 62% 14%,rgba(255,255,255,.55) 0 1px,transparent 2px),
+    linear-gradient(180deg,rgba(11,35,82,.85),transparent)
+}
+/* 每个页面的基础样式：默认隐藏，只有加 active 的页面才显示。 */
+.view{display:none;min-height:100dvh;padding:calc(22px + env(safe-area-inset-top,0px)) 18px calc(96px + var(--safe))}
+.view.active{display:block}.auth{padding-top:calc(62px + env(safe-area-inset-top,0px))}
+h1,h2,h3,p{margin-top:0}h1{font-size:30px;margin-bottom:6px}h2{font-size:18px;margin-bottom:8px}h3{font-size:14px}
+.muted{color:var(--muted)}.small{font-size:12px}.tiny{font-size:10px}
+.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;position:relative;z-index:2}
+.subhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.subhead h1{font-size:20px;margin:0}.back,.iconbtn{width:42px;height:42px;border:1px solid var(--line);border-radius:14px;background:rgba(16,42,82,.72)}
+.card{
+  position:relative;z-index:1;border:1px solid var(--line);border-radius:22px;
+  background:linear-gradient(145deg,rgba(20,51,95,.96),rgba(10,31,64,.96));padding:17px
+}.card+.card{margin-top:12px}
+.status{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:99px;background:rgba(57,213,141,.12);color:#a4f1cf;font-size:11px}
+.status:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+.state-text.good{color:#87e6bb}.state-text.warn{color:#ffd894}.state-text.bad{color:#ff9fab}
+.hero{padding:19px;overflow:hidden}.hero:after{content:"";position:absolute;right:-38px;top:-42px;width:160px;height:160px;border-radius:50%;border:1px solid rgba(79,124,255,.25);box-shadow:0 0 0 25px rgba(79,124,255,.05),0 0 0 52px rgba(79,124,255,.03)}
+.pillow{
+  width:154px;height:70px;margin:8px auto 16px;border-radius:48% 48% 42% 42% / 42% 47% 42% 46%;
+  background:linear-gradient(145deg,#f5f6f8,#adb7c7 52%,#68758a);
+  box-shadow:inset 8px 8px 14px rgba(255,255,255,.42),inset -10px -10px 17px rgba(22,34,57,.38),0 14px 26px rgba(0,0,0,.28);transform:rotate(2deg)
+}.pillow:after{content:"";display:block;width:44px;height:4px;border-radius:4px;background:var(--blue);position:relative;left:94px;top:49px;box-shadow:0 0 9px var(--blue)}
+.primary,.secondary,.danger{width:100%;min-height:50px;border-radius:16px;font-weight:700}.primary{border:0;background:linear-gradient(90deg,#3569ff,#8b4dff);box-shadow:0 10px 25px rgba(79,124,255,.22)}
+.secondary{border:1px solid var(--line);background:#0d254d}.secondary.active{background:#18396f;border-color:#6f91ff;color:#fff}.danger{border:1px solid rgba(255,109,125,.65);background:rgba(255,109,125,.12);color:#ff9fab}
+.row{display:flex;align-items:center;gap:12px;min-height:62px;border-bottom:1px solid rgba(36,75,122,.72)}
+.row:last-child{border-bottom:0}.grow{flex:1}.row b{display:block}.row small{display:block;color:var(--muted);margin-top:4px}
+.ico{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;background:rgba(79,124,255,.15);font-size:20px}
+.ico.purple{background:rgba(141,92,255,.16)}.ico.cyan{background:rgba(66,214,239,.13)}.ico.green{background:rgba(57,213,141,.13)}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.kpis.sleep-kpis{grid-template-columns:repeat(2,1fr)}.kpi{text-align:center;padding:11px 5px;border-radius:16px;background:rgba(10,31,64,.72);border:1px solid rgba(36,75,122,.65)}
+.kpi b{font-size:20px}.kpi span{display:block;color:var(--muted);font-size:9px;margin-top:6px}
+.section-title{display:flex;align-items:end;justify-content:space-between;margin:20px 2px 10px}.section-title h2{margin:0}.section-title button{border:0;background:transparent;color:#7fa3ff}.section-actions{display:flex;align-items:center;gap:8px}.details-trigger{min-height:28px;padding:4px 0;font-size:12px;white-space:nowrap}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.metric{padding:15px;border:1px solid var(--line);border-radius:18px;background:rgba(16,42,82,.8)}
+.metric b{font-size:27px}.metric small{color:var(--muted)}.spark{height:34px;margin-top:8px}.spark svg{width:100%;height:100%}.spark path{fill:none;stroke:var(--cyan);stroke-width:2}.spark.heart path{stroke:#ff6d91}
+.temperature-grid{margin-top:8px}.temperature-grid .metric{padding:12px 10px;border-radius:14px}.temperature-grid .metric b{font-size:22px}.temperature-grid .metric small{font-size:10px}
+.qbanner{display:flex;align-items:center;gap:13px;border-color:#485aad;background:linear-gradient(135deg,rgba(141,92,255,.18),rgba(79,124,255,.09))}
+.qbanner h2{margin-bottom:4px}.qbanner p{margin:0;color:var(--muted);font-size:11px}.qbanner button{border:0;border-radius:12px;background:rgba(141,92,255,.25);padding:9px 12px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;padding:4px;border:1px solid var(--line);border-radius:15px;background:rgba(10,31,64,.8);margin-bottom:14px}
+.tabs button{border:0;background:transparent;min-height:40px;border-radius:11px;color:var(--muted)}.tabs button.active{background:#18396f;color:#fff}.pane{display:none}.pane.active{display:block}
+.sound-art{height:150px;border-radius:20px;background:linear-gradient(145deg,#204f8b,#13254f);display:grid;place-items:center;font-size:42px;margin-bottom:15px}
+.player{text-align:center}.progress{height:5px;border-radius:5px;background:#274b79;overflow:hidden;margin:18px 0 8px}.progress i{display:block;width:42%;height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple))}
+.controls{display:flex;justify-content:center;gap:24px}.controls button{width:48px;height:48px;border:1px solid var(--line);border-radius:50%;background:#102a52}.controls .play{background:linear-gradient(135deg,#4f7cff,#8b4dff);border:0}
+.listbtn{width:100%;border:0;background:transparent;text-align:left;padding:0}
+.device-top{display:flex;gap:14px;align-items:center}.device-top .pillow{width:125px;height:57px;margin:0;flex:0 0 auto}.device-top .pillow:after{left:72px;top:38px}
+.note{padding:12px 14px;border-radius:14px;border:1px solid rgba(79,124,255,.32);background:rgba(79,124,255,.08);color:var(--muted);font-size:11px;line-height:1.6}
+.form{display:grid;gap:13px}.form label{display:grid;gap:7px;color:var(--muted);font-size:12px}.form input,.form select{width:100%;min-height:48px;border:1px solid var(--line);border-radius:13px;background:#0d254d;color:var(--text);padding:0 13px}
+.scan{height:215px;display:grid;place-items:center}.ble{width:105px;height:105px;border-radius:50%;display:grid;place-items:center;font-size:48px;background:radial-gradient(circle,#3569ff,#16356f 60%,#0a1f41);box-shadow:0 0 0 22px rgba(79,124,255,.06),0 0 0 45px rgba(79,124,255,.03)}
+.qcard{border:1px solid var(--line);border-radius:18px;padding:15px;background:rgba(16,42,82,.82)}.qcard+.qcard{margin-top:10px}.qcard .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.badge{font-size:10px;padding:5px 8px;border-radius:99px;background:rgba(255,192,93,.13);color:#ffd894}.badge.done{background:rgba(57,213,141,.13);color:#a4f1cf}
+.qcard p{color:var(--muted);font-size:11px;margin:8px 0 12px}.question{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid rgba(36,75,122,.7)}.question:last-child{border-bottom:0}
+.survey-card{border:1px solid var(--line);border-radius:18px;padding:15px;background:rgba(16,42,82,.82)}.survey-card+.survey-card{margin-top:10px}.survey-card .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.survey-card p{color:var(--muted);font-size:11px;line-height:1.55;margin:8px 0 12px}.survey-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.survey-actions a,.survey-actions button{min-height:42px;border-radius:13px;font-weight:700;text-decoration:none;display:grid;place-items:center;font-size:12px}.survey-actions a{background:linear-gradient(90deg,#3569ff,#8b4dff);color:#fff}.survey-actions button{border:1px solid var(--line);background:#0d254d;color:var(--text)}.survey-actions button.done{background:rgba(57,213,141,.12);border-color:rgba(57,213,141,.45);color:#a4f1cf}.survey-frequency{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.survey-frequency span{border:1px solid rgba(36,75,122,.72);border-radius:99px;padding:5px 8px;color:var(--muted);font-size:10px;background:rgba(10,31,64,.55)}
+.questionnaire-form{display:grid;gap:14px}.questionnaire-form .question{padding-bottom:15px;border-bottom:1px solid rgba(36,75,122,.72)}.questionnaire-form .question:last-child{border-bottom:0;padding-bottom:0}.questionnaire-form label.question-label{display:block;color:var(--text);font-size:14px;line-height:1.55;margin-bottom:9px}.questionnaire-form .question-help{display:block;color:var(--muted);font-size:11px;margin-top:-5px;margin-bottom:9px}.questionnaire-form input:not([type=radio]),.questionnaire-form select,.questionnaire-form textarea{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;background:#0d254d;color:var(--text);padding:10px 12px}.questionnaire-form input[type=file]{padding:7px;font-size:12px}.questionnaire-form input[type=file]::file-selector-button{border:0;border-radius:8px;background:#3569ff;color:#fff;padding:8px 10px;margin-right:9px;font:inherit}.questionnaire-form textarea{min-height:82px;resize:vertical}.questionnaire-form .options{grid-template-columns:1fr}.questionnaire-form .option{font-size:12px;line-height:1.4}.questionnaire-form .option input{flex:0 0 auto}
+.options{display:grid;gap:8px}.option{display:flex;align-items:center;gap:9px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#0d254d}.option input{accent-color:var(--blue)}
+.profile-head{display:flex;align-items:center;gap:15px;padding:18px}.avatar{width:76px;height:76px;border-radius:50%;background:linear-gradient(145deg,#7288c5,#2f467d);display:grid;place-items:center;font-size:30px;font-weight:700}
+.menu .row{min-height:72px}
+.bottom{position:fixed;z-index:20;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,430px);display:grid;grid-template-columns:repeat(4,1fr);padding:8px 6px calc(8px + var(--safe));border-top:1px solid var(--line);background:rgba(6,20,42,.96);backdrop-filter:blur(18px)}
+.bottom button{border:0;background:transparent;color:#7289ad;min-height:60px;display:grid;place-items:center;align-content:center;gap:3px}.bottom button.active{color:#4f7cff}.navico{font-size:22px}
+.toast{position:fixed;z-index:50;left:50%;bottom:90px;transform:translate(-50%,16px);opacity:0;pointer-events:none;background:#173662;border:1px solid var(--line);padding:10px 14px;border-radius:12px;max-width:360px;font-size:11px;transition:.2s}.toast.show{opacity:1;transform:translate(-50%,0)}
+.bottom[hidden]{display:none}
+.linkbtn{border:0;background:transparent;color:#7fa3ff;padding:4px 0;text-align:right}
+.login-pane{display:none}.login-pane.active{display:grid}.login-extra{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:-5px}
+.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:13px 0}.check{border:1px solid rgba(36,75,122,.72);border-radius:14px;padding:9px;background:rgba(10,31,64,.56);font-size:11px;color:var(--muted)}.check b{display:block;color:var(--text);margin-bottom:3px}.check.warn b{color:#ffd894}.check.bad b{color:#ff9fab}
+.alert-stack{display:grid;gap:9px;margin:14px 0}.alert{display:flex;align-items:flex-start;gap:10px;border:1px solid rgba(36,75,122,.72);border-radius:16px;padding:12px 13px;background:rgba(16,42,82,.72);font-size:11px;line-height:1.45}.alert b{display:block;font-size:13px;margin-bottom:3px}.alert.warn{border-color:rgba(255,192,93,.42);background:rgba(255,192,93,.1)}.alert.good{border:0;background:linear-gradient(90deg,#3569ff,#8b4dff);box-shadow:0 10px 25px rgba(79,124,255,.25);color:#fff}.alert.good>span{font-size:17px;line-height:1}.alert.good div span{color:rgba(255,255,255,.84)}.alert.bad{border-color:rgba(255,109,125,.44);background:rgba(255,109,125,.1)}.alert button{border:0;background:transparent;color:#7fa3ff;padding:0;margin-top:5px}
+.status.warn{background:rgba(255,192,93,.14);color:#ffd894}.status.warn:before{background:var(--amber);box-shadow:0 0 8px var(--amber)}.status.bad{background:rgba(255,109,125,.13);color:#ff9fab}.status.bad:before{background:var(--red);box-shadow:0 0 8px var(--red)}.status.done{background:rgba(66,214,239,.13);color:#a9f3ff}.status.done:before{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.value-pill{display:inline-flex;align-items:center;gap:6px;min-height:28px;border-radius:99px;padding:5px 9px;background:rgba(10,31,64,.72);border:1px solid rgba(36,75,122,.72);font-size:11px;color:var(--muted)}
+.segmented{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:5px;border:1px solid var(--line);border-radius:14px;background:rgba(10,31,64,.65)}.segmented button{border:0;border-radius:10px;min-height:38px;background:transparent;color:var(--muted);font-size:12px}.segmented button.active{background:#18396f;color:#fff}
+.theme-choice{grid-template-columns:repeat(2,1fr)}
+.control-line{display:grid;gap:8px;margin-top:13px}.control-line label{font-size:12px;color:var(--muted)}.control-line input[type=range]{width:100%;accent-color:var(--blue)}.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.toggle-row input{accent-color:var(--blue);transform:scale(1.1)}
+.stim-box{margin-top:13px;padding:13px;border:1px solid rgba(36,75,122,.72);border-radius:15px;background:rgba(10,31,64,.56)}
+.stim-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.stim-head b{display:block}.stim-head small{display:block;margin-top:4px}.stim-time{font-size:25px;font-weight:800;line-height:1}
+.stim-progress{height:7px;border-radius:7px;background:#0d254d;overflow:hidden;margin-top:13px}.stim-progress i{display:block;width:0%;height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));transition:width .25s}
+.stim-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}.stim-actions button{min-height:46px}
+.row-actions{display:flex;align-items:center;gap:10px}.fav{min-width:30px;text-align:center;color:#ffd894;font-size:19px}.fav.active{color:#ffc05d;text-shadow:0 0 10px rgba(255,192,93,.65)}
+.calendar-head{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:7px;color:var(--muted);font-size:10px;text-align:center}.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.day{min-height:48px;border:1px solid rgba(36,75,122,.72);border-radius:12px;background:#0d254d;color:var(--muted);display:grid;place-items:center;padding:4px;font-size:11px}.day b{font-size:13px;color:var(--text)}.day.good{border-color:rgba(57,213,141,.5)}.day.warn{border-color:rgba(255,192,93,.5)}.day.active{background:#18396f;color:#fff;box-shadow:0 0 0 1px rgba(127,163,255,.48) inset}.record-period-heading{display:grid;grid-template-columns:38px minmax(0,1fr) 38px;align-items:center;gap:8px;margin:18px 2px 10px;text-align:center}.record-period-heading h2{margin:0;font-size:18px}.record-period-heading span{display:block;margin-top:3px;color:var(--muted);font-size:10px}.period-nav{width:38px;height:38px;border:1px solid var(--line);border-radius:12px;background:#0d254d;color:var(--text);font-size:25px;line-height:1}.period-nav:disabled{opacity:.35;cursor:default}.record-top{display:grid;grid-template-columns:42px 1fr 42px;align-items:start;margin:4px 0 20px}.record-top button{border:0;background:transparent;color:var(--text);min-height:42px;font-size:25px}.record-title{text-align:center}.record-title h2{font-size:30px;margin:0 0 4px}.record-date{display:inline-flex;align-items:center;gap:7px;color:var(--text);font-size:20px}.record-range{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-radius:18px;background:rgba(10,31,64,.72);padding:5px;margin-bottom:18px}.record-range button{border:0;background:transparent;min-height:52px;border-radius:14px;color:var(--muted);font-size:20px;font-weight:700}.record-range button.active{background:#18396f;color:#fff}.record-mode-panel{display:none}.record-mode-panel.active{display:block}.record-summary{display:grid;grid-template-columns:1.25fr 1fr;gap:10px;align-items:stretch}.record-total{display:grid;align-content:center;gap:5px}.record-total b{font-size:48px;line-height:1}.record-total span,.record-stat span{color:var(--muted);font-size:11px}.record-stat-grid{display:grid;grid-template-columns:1fr;gap:8px}.record-stat{border:1px solid rgba(36,75,122,.65);border-radius:14px;padding:10px;background:rgba(10,31,64,.54)}.record-stat b{display:block;font-size:18px}.record-list{display:grid;gap:9px}.record-item{width:100%;border:1px solid rgba(36,75,122,.65);border-radius:16px;background:rgba(16,42,82,.72);color:var(--text);padding:13px;text-align:left}.record-item.active{border-color:rgba(127,163,255,.72);background:#18396f}.record-item b{display:block;font-size:15px;margin-bottom:4px}.record-item span,.record-item small{display:block;color:var(--muted);line-height:1.5}.record-bars{height:108px;display:flex;align-items:end;gap:8px}.record-bars i{flex:1;border-radius:8px 8px 0 0;background:linear-gradient(180deg,var(--cyan),var(--blue));min-height:18px}.record-detail h3{font-size:16px;margin-bottom:7px}.record-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:11px}.record-meta div{border:1px solid rgba(36,75,122,.65);border-radius:12px;padding:9px;text-align:center;background:rgba(10,31,64,.54)}.record-meta b{display:block;font-size:15px}
+.timeline{display:flex;height:38px;overflow:hidden;border-radius:12px;border:1px solid rgba(36,75,122,.72);background:#0d254d}.stage{border:0;border-right:1px solid rgba(6,20,42,.7);min-width:22px;color:#fff;font-size:10px}.stage:last-child{border-right:0}.stage.awake{background:#ff6d7d}.stage.light{background:#4f7cff}.stage.deep{background:#8d5cff}.stage.rem{background:#42d6ef}.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px}.legend span{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:10px}.legend i{width:9px;height:9px;border-radius:3px;display:inline-block}.insights{display:grid;gap:10px}.insight{border:1px solid rgba(36,75,122,.65);border-radius:14px;padding:12px;background:rgba(10,31,64,.58)}.insight b{display:block;margin-bottom:4px}
+.mini-form{display:grid;gap:10px}.mini-form .line{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px}.mini-form input[type=time],.mini-form select,.card select{min-height:38px;border:1px solid var(--line);border-radius:11px;background:#0d254d;color:var(--text);padding:0 10px}
+.guide-step{display:flex;gap:12px;align-items:flex-start}.guide-num{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(79,124,255,.18);color:#b8c9ff;font-weight:700;flex:0 0 auto}.signal-bars{display:flex;gap:5px;align-items:end;height:34px;margin-top:10px}.signal-bars i{width:16px;border-radius:5px;background:#244b7a}.signal-bars i:nth-child(1){height:30%}.signal-bars i:nth-child(2){height:50%}.signal-bars i:nth-child(3){height:70%}.signal-bars i:nth-child(4){height:92%}.signal-bars.good i{background:linear-gradient(180deg,#42d6ef,#39d58d)}
+.modal{position:fixed;z-index:80;inset:0;display:none;align-items:end;justify-content:center;background:rgba(1,8,20,.58);padding:20px}.modal.show{display:flex}.dialog{width:min(100%,390px);border:1px solid var(--line);border-radius:20px;background:#102a52;padding:18px;box-shadow:0 18px 50px rgba(0,0,0,.35)}.dialog h2{margin-bottom:6px}.dialog p{color:var(--muted);font-size:12px;line-height:1.6}.dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:15px}.dialog-actions button{min-height:46px;border-radius:14px;font-weight:700}.dialog-actions .cancel{border:1px solid var(--line);background:#0d254d}.dialog-actions .ok{border:0;background:linear-gradient(90deg,#3569ff,#8b4dff)}.dialog.danger .ok{background:#ff6d7d;color:#fff}
+.realtime-detail-list{display:grid;gap:10px;margin-top:15px}.realtime-detail-list div{display:flex;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid rgba(36,75,122,.72);font-size:12px}.realtime-detail-list div:last-child{border-bottom:0}.realtime-detail-list span{color:var(--muted)}.realtime-detail-list b{text-align:right;font-size:12px;font-weight:600;word-break:break-word}
+/* 日间版主题：只改颜色、阴影和少量布局细节，HTML 结构不变。 */
+body.theme-day{
+  --text:#2f2924;--muted:#776b62;--line:#dac4b5;--blue:#9f6fdb;--purple:#8a6ccf;--cyan:#579f9a;
+  background:#cdbbad
+}
+body.theme-day .app{
+  background:linear-gradient(180deg,#ead5c4 0%,#f0e0d4 44%,#e7ddd8 100%);
+  color:var(--text);box-shadow:0 18px 56px rgba(82,64,50,.18)
+}
+body.theme-day .sky{
+  opacity:.72;
+  background:linear-gradient(180deg,rgba(205,167,137,.42),rgba(231,208,190,.18) 58%,transparent)
+}
+body.theme-day .card,
+body.theme-day .metric,
+body.theme-day .qcard,
+body.theme-day .survey-card,
+body.theme-day .dialog,
+body.theme-day .alert{
+  background:linear-gradient(180deg,rgba(255,248,240,.88),rgba(244,231,220,.84));
+  border-color:var(--line);box-shadow:0 8px 22px rgba(91,67,48,.08)
+}
+body.theme-day .hero{padding:17px;border-radius:20px;background:linear-gradient(180deg,rgba(255,248,240,.9),rgba(243,229,217,.88))}
+body.theme-day .hero:after{display:none}
+body.theme-day .hero .pillow{
+  width:138px;height:62px;margin:7px auto 15px;
+  background:linear-gradient(145deg,#eef0ee,#b7c0c5 56%,#6b7480);
+  box-shadow:inset 7px 8px 13px rgba(255,255,255,.45),inset -8px -10px 15px rgba(68,64,58,.22),0 10px 20px rgba(82,64,50,.2)
+}
+body.theme-day .hero .pillow:after{left:82px;top:43px;background:#8a6ccf;box-shadow:0 0 8px rgba(138,108,207,.45)}
+body.theme-day .view{padding-left:16px;padding-right:16px}
+body.theme-day .header{margin-bottom:18px}
+body.theme-day .iconbtn,
+body.theme-day .back{background:rgba(72,78,96,.88);border-color:rgba(72,78,96,.18);color:#fff;box-shadow:0 8px 18px rgba(72,58,48,.12)}
+body.theme-day .primary,
+body.theme-day .survey-actions a,
+body.theme-day .dialog-actions .ok{background:linear-gradient(90deg,#c8755e,#8a6ccf);box-shadow:0 10px 24px rgba(177,104,82,.18)}
+body.theme-day .status{background:rgba(69,137,100,.13);color:#2f6f4d}
+body.theme-day .status.warn{background:rgba(184,112,40,.15);color:#8d5521}
+body.theme-day .status.bad{background:rgba(193,81,85,.13);color:#9f3339}
+body.theme-day .status.done{background:rgba(87,159,154,.14);color:#33736f}
+body.theme-day .state-text.good{color:#2f6f4d}
+body.theme-day .state-text.warn{color:#8d5521}
+body.theme-day .state-text.bad{color:#9f3339}
+body.theme-day .alert.warn{background:linear-gradient(180deg,#fbebda,#f5dfc9);border-color:#dcb487}
+body.theme-day .alert.bad{background:linear-gradient(180deg,#fbe5e3,#f2d8d6);border-color:#dbaaa5}
+body.theme-day .muted,
+body.theme-day .row small,
+body.theme-day .metric small,
+body.theme-day .qcard p,
+body.theme-day .survey-card p,
+body.theme-day .dialog p{color:var(--muted)}
+body.theme-day .kpi,
+body.theme-day .check,
+body.theme-day .tabs,
+body.theme-day .segmented,
+body.theme-day .value-pill,
+body.theme-day .record-meta div,
+body.theme-day .insight,
+body.theme-day .stim-box{
+  background:rgba(239,226,215,.58);border-color:var(--line)
+}
+body.theme-day .checks{gap:9px}
+body.theme-day .check{padding:10px 8px;border-radius:11px;background:rgba(239,226,215,.64);box-shadow:none}
+body.theme-day .check b{color:#2f2924}
+body.theme-day .check.warn{background:#f4dfc7;border-color:#dcb487}
+body.theme-day .check.bad{background:#f3d9d5;border-color:#dbaaa5}
+body.theme-day .qbanner{border-color:#dcc5b6;background:linear-gradient(135deg,rgba(255,248,240,.92),rgba(235,221,211,.82));box-shadow:0 6px 18px rgba(91,67,48,.07)}
+body.theme-day .qbanner .ico{background:#ead7ee;color:#7f4636}
+body.theme-day .qbanner button{background:#e8d3ed;color:#2f2924}
+body.theme-day .section-title{margin:18px 2px 8px}
+body.theme-day .section-title button,
+body.theme-day .linkbtn,
+body.theme-day .alert button{color:#94644f}
+body.theme-day .kpi{border-radius:12px;padding:12px 5px;background:rgba(239,226,215,.62)}
+body.theme-day .metric{border-radius:14px;background:linear-gradient(180deg,rgba(255,248,240,.9),rgba(244,231,220,.82))}
+body.theme-day .record-top button{color:#2f2924}
+body.theme-day .record-range{background:rgba(219,201,188,.78)}
+body.theme-day .record-range button.active{background:rgba(255,248,240,.92);color:#2f2924;box-shadow:0 5px 14px rgba(91,67,48,.08)}
+body.theme-day .record-stat,
+body.theme-day .record-item{background:rgba(239,226,215,.62);border-color:var(--line)}
+body.theme-day .record-item.active{background:#ead6c8;border-color:#c99f89}
+body.theme-day .form input,
+body.theme-day .form select,
+body.theme-day .option,
+body.theme-day .day,
+body.theme-day .mini-form input[type=time],
+body.theme-day .mini-form select,
+body.theme-day .card select,
+body.theme-day .survey-actions button,
+body.theme-day .dialog-actions .cancel{
+  background:#f2e6dc;color:var(--text);border-color:var(--line)
+}
+body.theme-day .secondary{background:#f2e6dc;color:var(--text);border-color:var(--line)}
+body.theme-day .secondary.active,
+body.theme-day .tabs button.active,
+body.theme-day .segmented button.active{background:#ead6c8;color:#7f4636}
+body.theme-day .survey-actions button.done{background:#e7dbd1;color:#7f4636;border-color:#cda58e}
+body.theme-day .bottom{background:rgba(239,221,207,.96);border-color:#d7bfae;box-shadow:0 -8px 22px rgba(91,67,48,.08)}
+body.theme-day .bottom button{color:#8b7a70;border-radius:14px}
+body.theme-day .bottom button.active{color:#a55842;background:rgba(255,247,238,.58)}
+body.theme-day .sound-art{background:linear-gradient(145deg,#e8cdbc,#d9d0e6)}
+body.theme-day .progress,
+body.theme-day .timeline,
+body.theme-day .stim-progress{background:#e1d2c7;border-color:var(--line)}
+body.theme-day .toast{background:#fff7ef;color:var(--text);border-color:var(--line);box-shadow:0 10px 28px rgba(91,67,48,.16)}
+/* 可读性增强：大字体和长辈模式会扩大文字/按钮，减少阅读压力。 */
+body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-large .small{font-size:14px}body.elder-mode .app{max-width:460px}body.elder-mode .grid2,body.elder-mode .kpis{grid-template-columns:1fr 1fr}body.elder-mode .bottom button{min-height:68px;font-size:14px}
+/* 宽屏预览时给 App 外壳加圆角，方便在电脑浏览器里看原型。 */
+@media(min-width:560px){body{padding:20px 0}.app{border-radius:26px;min-height:calc(100dvh - 40px)}.bottom{bottom:20px;border-radius:0 0 26px 26px}}
+</style>
+</head>
+<body>
+<main class="app" id="app">
+<!-- 背景装饰层：只负责顶部氛围，不参与点击和数据逻辑。 -->
+<div class="sky"></div>
+
+<!--
+  登录页。
+  class 说明：
+  - view：这是一个可切换页面，JS 会通过 open(id) 控制显示/隐藏。
+  - auth：登录页专用间距。
+  - active：当前默认显示登录页。
+  id="login" 是 JS 找到这一页的唯一标识。
+-->
+<section class="view auth active" id="login">
+  <!-- 登录页头部品牌区域：展示产品名和一句说明。 -->
+  <div style="margin-bottom:72px">
+    <!-- status 是通用小标签样式，这里用内联 style 单独调成品牌蓝色。 -->
+    <div class="status" style="background:rgba(79,124,255,.12);color:#b8c9ff">SleepPillow</div>
+    <h1 style="margin-top:14px">睡眠枕</h1><p class="muted">智能睡眠监测与助眠管理</p>
+  </div>
+
+  <!--
+    登录方式切换栏。
+    data-login-tab 的值对应下面两个 form 的 id：
+    - loginForm：密码登录表单
+    - smsForm：验证码登录表单
+    JS 通过 setLoginTab(id) 切换 active 状态。
+  -->
+  <nav class="tabs login-tabs">
+    <button class="active" type="button" data-login-tab="loginForm">密码登录</button>
+    <button type="button" data-login-tab="smsForm">验证码登录</button>
+  </nav>
+
+  <!-- 密码登录表单。active 表示初始显示这一组输入框。 -->
+  <form class="form login-pane active" id="loginForm">
+    <!-- 账号由管理员预先创建；密码交给 Android 原生层发送，页面不会保存登录令牌。 -->
+    <label>账号<input id="loginUsername" autocomplete="username" maxlength="64" required></label>
+    <label>密码<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+    <p class="muted small" id="loginHint">请输入管理员分配的账号和密码。</p>
+    <button class="primary" id="loginSubmit" type="submit">登录</button>
+  </form>
+
+  <!-- 验证码登录表单。没有 active，所以默认隐藏。 -->
+  <form class="form login-pane" id="smsForm">
+    <label>手机号<input maxlength="11" required></label>
+    <label>短信验证码<input maxlength="6" required></label>
+    <!-- id="sendCode" 给 JS 绑定“获取验证码”的点击提示。 -->
+    <button class="secondary" id="sendCode" type="button">获取验证码</button>
+    <button class="primary" type="submit">验证码登录</button>
+  </form>
+  <p class="muted small" style="text-align:center;margin-top:18px">登录后，通过蓝牙连接实物睡眠枕即可选择当前设备。</p>
+</section>
+
+<!-- 首页：展示设备状态、开始睡眠入口、问卷提醒和昨夜睡眠摘要。 -->
+<section class="view" id="home">
+  <!-- 顶部标题区；右侧圆形按钮会通过 data-open="profile" 打开“我的”页面。 -->
+  <header class="header"><div><p class="muted small" id="today"></p><h1>睡眠枕</h1><p class="muted">今晚睡眠概览</p></div><button class="iconbtn" data-open="profile">○</button></header>
+
+  <!-- 首页主卡片：设备状态 + 枕头示意图 + 开始/结束睡眠按钮。 -->
+  <section class="card hero">
+    <!-- id 以 home 开头的元素会被 setDeviceState() 和 renderSleepSessionState() 动态改文案/样式。 -->
+    <span class="status warn" id="homeDeviceStatus">电量偏低</span>
+    <div class="pillow"></div>
+    <div style="text-align:center"><h2 id="homeStatusTitle">设备电量偏低</h2><p class="muted small" id="homeStatusDesc">建议先给睡眠枕充电，避免整晚记录过程中断。</p>
+      <!-- 四个小状态块：蓝牙、电量、Wi-Fi、采集状态。 -->
+      <div class="checks">
+        <div class="check" id="homeBluetoothCheck"><b>蓝牙正常</b>实时控制可用</div>
+        <div class="check warn" id="homeBatteryCheck"><b>电量 18%</b>建议先充电</div>
+        <div class="check" id="homeWifiCheck"><b>Wi‑Fi 未连接</b>尚未完成配置</div>
+        <div class="check" id="homeSignalCheck"><b>信号良好</b>采集稳定</div>
+      </div>
+      <!-- “准备入睡”只记录主观时间和问卷；设备记录由 ESP32 上电后的数据自动开始。 -->
+      <button class="primary" id="startSleep">准备入睡</button>
+      <!-- 首页结束按钮只结束主观标记，不会停止仍在上电采集的智能助眠枕。 -->
+      <button class="danger" id="homeEndSleep" type="button" style="margin-top:10px" hidden>结束准备入睡</button>
+      <!-- 首次使用引导：data-open 表示点击后进入 onboarding 页面。 -->
+      <button class="secondary" id="homeGuideButton" data-open="onboarding" style="margin-top:10px">首次使用引导</button>
+    </div>
+  </section>
+
+  <!-- 首页异常提醒区：根据演示设备状态显示电量、Wi-Fi 或传感器提醒。 -->
+  <section class="alert-stack">
+    <div class="alert warn" id="homeBatteryAlert"><span>!</span><div><b>设备电量偏低</b>低于 20% 时建议先充电，避免整晚记录中断。<button data-open="device">查看设备状态</button></div></div>
+    <div class="alert bad" id="homeWifiAlert" hidden><span>!</span><div><b>Wi‑Fi 连接失败</b>本地数据已保存，连接 Wi‑Fi 后会自动补传。<button data-open="wifi">重新连接</button></div></div>
+    <div class="alert warn" id="homeSignalAlert" hidden><span>!</span><div><b>传感器信号偏弱</b>建议调整枕头位置或躺姿，确保传感器区域靠近颈肩。<button data-open="onboarding">重新校准</button></div></div>
+  </section>
+
+  <!-- 今日问卷入口：打开 App 内问卷中心，真实提交状态由服务器同步。 -->
+  <section class="card qbanner">
+    <div class="ico purple">☑</div><div class="grow"><h2>今日问卷</h2><p>每日正式问卷待填写 · PSQI仅实验前后填写</p></div>
+    <button data-open="questionnaires">去填写</button>
+  </section>
+
+  <!-- 昨夜摘要：由服务器在晨间结束的会话中选择时长最长的一段。 -->
+  <div class="section-title"><h2>昨夜睡眠</h2><button type="button" data-open-record>查看报告 ›</button></div>
+  <section class="kpis sleep-kpis">
+      <div class="kpi"><b id="homeReportDuration">--</b><span>睡眠时长</span></div>
+    <div class="kpi"><b id="homeReportHeart">--</b><span>平均心率</span></div>
+    <div class="kpi"><b id="homeReportStart">--</b><span>开始时间</span></div>
+    <div class="kpi"><b id="homeReportEnd">--</b><span>结束时间</span></div>
+  </section>
+
+  <!-- 实时睡眠数据来自服务器最近收到的记录，不依赖手机当前是否保持蓝牙连接。 -->
+  <div class="section-title"><h2>实时睡眠数据</h2><div class="section-actions"><span class="status warn" id="realtimeDataStatus">等待数据</span><button class="details-trigger" id="realtimeDetailsButton" type="button" title="查看实时睡眠数据详情">详情 ›</button></div></div>
+  <section class="grid2" aria-live="polite">
+    <div class="metric"><small>心率</small><div><b id="homeHeartRate">--</b> bpm</div></div>
+    <div class="metric"><small>呼吸率</small><div><b id="homeRespiratoryRate">--</b> 次/分</div></div>
+  </section>
+  <section class="grid3 temperature-grid" aria-label="三路温度">
+    <div class="metric"><small>温度 1</small><div><b id="homeTemperature1">--</b> °C</div></div>
+    <div class="metric"><small>温度 2</small><div><b id="homeTemperature2">--</b> °C</div></div>
+    <div class="metric"><small>温度 3</small><div><b id="homeTemperature3">--</b> °C</div></div>
+  </section>
+  <!-- 助眠功能快捷入口：两个按钮都跳到“助眠”页，只是打开不同关注点。 -->
+  <div class="section-title"><h2>助眠功能</h2></div>
+  <section class="grid2">
+    <button class="card listbtn" type="button" data-open-assist><div class="row" style="border:0"><div class="ico purple">≈</div><div class="grow"><b>超声助眠</b><small>固定30分钟</small></div><span>›</span></div></button>
+    <button class="card listbtn" type="button" data-open-assist><div class="row" style="border:0"><div class="ico cyan">♪</div><div class="grow"><b>音频助眠</b><small>白噪声 + 自定义音乐</small></div><span>›</span></div></button>
+  </section>
+</section>
+
+<!-- 助眠页：包含超声助眠、音频助眠，以及睡眠记录入口。 -->
+<section class="view" id="sleep">
+  <header class="header"><div><p class="muted small">睡前使用</p><h1>助眠</h1></div></header>
+  <!-- 页内 Tab：data-tab 控制显示 audioPane 或 recordPane。 -->
+  <nav class="tabs"><button class="active" data-tab="audioPane">助眠控制</button><button data-tab="recordPane">睡眠记录</button></nav>
+
+  <!-- 助眠控制面板：超声固定计时 + 音频播放原型。 -->
+  <div class="pane active" id="audioPane">
+    <div class="section-title"><h2>超声助眠</h2><button type="button" data-info-details="stim">详情 ›</button></div>
+    <!-- 第一版硬件不能 App 调模式，所以这里只做 30 分钟计时和状态提示。 -->
+    <section class="card">
+      <div class="row"><div class="ico purple">≈</div><div class="grow"><b>固定刺激模式</b><small>实体开关 · 单次 30 分钟</small></div><span class="status warn" id="stimStatus">待开启</span></div>
+      <!-- stimTimer / stimProgress / stimHint 会被 renderStimStatus() 动态刷新。 -->
+      <div class="stim-box">
+        <div class="stim-head"><div><b>本次刺激计时</b><small class="muted" id="stimHint">打开硬件开关后，可在 App 中记录开始时间并提醒结束。</small></div><div class="stim-time" id="stimTimer">30:00</div></div>
+        <div class="stim-progress"><i id="stimProgress"></i></div>
+      </div>
+      <!-- 超声助眠两个主要动作：开始计时、重置计时。 -->
+      <div class="stim-actions">
+        <button class="primary" id="hardwareStimStart" type="button">我已打开硬件开关</button>
+        <button class="secondary" id="hardwareStimReset" type="button">重新计时</button>
+      </div>
+      <button class="secondary" data-open="onboarding" style="margin-top:10px">查看摆放引导</button>
+    </section>
+
+    <!-- 音频播放器原型：目前只切换按钮和曲目信息，未真正播放音频文件。 -->
+    <div class="section-title"><h2>音频助眠</h2></div>
+    <section class="card player">
+      <div class="sound-art">♪</div><p class="muted small">当前选择</p><h2 id="trackName">细雨白噪声</h2><p class="muted small" id="trackMeta">自然声 · 30 分钟</p>
+      <div class="progress"><i></i></div><div class="controls"><button>‹</button><button class="play" id="playBtn">▶</button><button>›</button></div>
+    </section>
+
+    <!-- 音频播放设置：定时关闭、渐弱停止、循环播放。 -->
+    <section class="card">
+      <div class="row"><div class="ico cyan">◷</div><div class="grow"><b>定时关闭</b><small>到点后自动停止播放</small></div><select id="audioTimer" style="max-width:112px"><option>30分钟</option><option>45分钟</option><option>60分钟</option><option>整夜</option></select></div>
+      <div class="row"><div class="ico purple">⇣</div><div class="grow"><b>渐弱停止</b><small>结束前 5 分钟缓慢降低音量</small></div><label class="toggle-row"><input id="fadeOut" type="checkbox" checked></label></div>
+      <div class="row"><div class="ico cyan">↻</div><div class="grow"><b>循环播放</b><small>适合整夜白噪声</small></div><label class="toggle-row"><input id="loopAudio" type="checkbox"></label></div>
+    </section>
+
+    <!-- 白噪声列表：data-name / data-meta 用来更新播放器里的曲名和说明。 -->
+    <div class="section-title"><h2>白噪声</h2></div>
+    <section class="card">
+      <button class="listbtn soundChoice" data-name="细雨白噪声" data-meta="自然声 · 30 分钟"><div class="row"><div class="ico cyan">☂</div><div class="grow"><b>细雨白噪声</b><small>平稳连续的雨声</small></div><span class="row-actions"><span class="fav" data-fav="细雨白噪声">☆</span><span>›</span></span></div></button>
+      <button class="listbtn soundChoice" data-name="海浪声" data-meta="自然声 · 45 分钟"><div class="row"><div class="ico cyan">≋</div><div class="grow"><b>海浪声</b><small>舒缓海浪背景声</small></div><span class="row-actions"><span class="fav" data-fav="海浪声">☆</span><span>›</span></span></div></button>
+      <button class="listbtn soundChoice" data-name="粉红噪声" data-meta="稳定背景 · 整夜"><div class="row"><div class="ico purple">∿</div><div class="grow"><b>粉红噪声</b><small>稳定低频背景声</small></div><span class="row-actions"><span class="fav" data-fav="粉红噪声">☆</span><span>›</span></span></div></button>
+    </section>
+
+    <!-- 收藏列表：JS 会根据 localStorage 里的 favorites 动态生成内容。 -->
+    <div class="section-title"><h2>收藏</h2></div>
+    <section class="card" id="favoriteList"><p class="muted small" style="margin:0">暂无收藏，点白噪声右侧星标即可添加。</p></section>
+
+    <!-- 自定义音乐入口：input type=file 让用户选择手机本地音频。 -->
+    <div class="section-title"><h2>我的音乐</h2></div>
+    <section class="card">
+      <div class="row"><div class="ico purple">＋</div><div class="grow"><b>添加自定义音乐</b><small>从手机选择本地音频文件</small></div><label style="padding:10px;color:#7fa3ff"><input id="musicFile" type="file" accept="audio/*" hidden>选择</label></div>
+      <div id="customMusic"></div>
+    </section>
+  </div>
+
+  <!-- 睡眠记录面板：在助眠页里点击“睡眠记录”后显示。 -->
+  <div class="pane" id="recordPane">
+    <div class="section-title"><h2>昨夜睡眠</h2><button data-open="report">查看详情 ›</button></div>
+    <section class="kpis sleep-kpis">
+      <div class="kpi"><b id="recordDuration">--</b><span>睡眠时长</span></div>
+      <div class="kpi"><b id="recordStart">--</b><span>开始时间</span></div>
+      <div class="kpi"><b id="recordEnd">--</b><span>结束时间</span></div>
+      <div class="kpi"><b id="recordSampleCount">--</b><span>采样条数</span></div>
+    </section>
+    <div class="section-title"><h2>本次平均</h2></div>
+    <section class="grid3 temperature-grid">
+      <div class="metric"><small>心率</small><div><b id="recordAverageHeart">--</b> bpm</div></div>
+      <div class="metric"><small>呼吸</small><div><b id="recordAverageRespiratory">--</b> 次/分</div></div>
+      <div class="metric"><small>温度</small><div><b id="recordAverageTemperature">--</b> °C</div></div>
+    </section>
+    <div class="section-title"><h2>睡眠阶段</h2></div>
+    <section class="card">
+      <div class="timeline" id="realRecordStageTimeline"><span class="muted small">暂无阶段数据。</span></div>
+      <div class="legend"><span><i style="background:#4f7cff"></i>浅睡</span><span><i style="background:#8d5cff"></i>深睡</span><span><i style="background:#42d6ef"></i>REM</span><span><i style="background:#ff6d7d"></i>清醒</span></div>
+      <p class="muted small" id="realRecordStageDetail" style="margin:12px 0 0">点击时间轴查看该阶段的实际采集时间。</p>
+    </section>
+    <nav class="record-range" style="margin-top:18px">
+      <button class="active" type="button" data-record-range="day">日</button>
+      <button type="button" data-record-range="week">周</button>
+      <button type="button" data-record-range="month">月</button>
+    </nav>
+
+    <div class="record-mode-panel active" id="recordDayPanel">
+      <div class="record-period-heading">
+        <button class="period-nav" type="button" data-report-shift="day" data-report-direction="-1" aria-label="查看昨天" title="查看昨天">‹</button>
+        <div><h2 id="dayRecordTitle">昨夜睡眠</h2><span id="dayRecordDate">--</span></div>
+        <button class="period-nav" type="button" id="dayNextButton" data-report-shift="day" data-report-direction="1" aria-label="查看明天" title="查看明天">›</button>
+      </div>
+      <section class="card record-detail" id="recordDetail"><p class="muted small" style="margin:0">正在等待服务器生成睡眠报告。</p></section>
+      <div class="section-title"><h2>日间小憩</h2><span class="muted tiny">当天短时记录</span></div>
+      <section class="card" id="dayNapList"><p class="muted small" style="margin:0">暂无日间小憩记录。</p></section>
+    </div>
+    <div class="record-mode-panel" id="recordWeekPanel">
+      <div class="record-period-heading">
+        <button class="period-nav" type="button" data-report-shift="week" data-report-direction="-1" aria-label="查看上一周" title="查看上一周">‹</button>
+        <div><h2>周睡眠记录</h2><span id="weekCalendarRange">--</span></div>
+        <button class="period-nav" type="button" id="weekNextButton" data-report-shift="week" data-report-direction="1" aria-label="查看下一周" title="查看下一周">›</button>
+      </div>
+      <section class="card">
+        <div class="calendar-head"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="calendar" id="weekCalendar"><p class="muted small">暂无已结束的睡眠记录。</p></div>
+      </section>
+      <section class="card record-detail" id="weekRecordDetail"><p class="muted small" style="margin:0">点击有记录的日期查看详情。</p></section>
+    </div>
+    <div class="record-mode-panel" id="recordMonthPanel">
+      <div class="record-period-heading">
+        <button class="period-nav" type="button" data-report-shift="month" data-report-direction="-1" aria-label="查看上个月" title="查看上个月">‹</button>
+        <div><h2 id="monthCalendarTitle">本月记录</h2><span>按日期查看</span></div>
+        <button class="period-nav" type="button" id="monthNextButton" data-report-shift="month" data-report-direction="1" aria-label="查看下个月" title="查看下个月">›</button>
+      </div>
+      <section class="card">
+        <div class="calendar-head"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="calendar" id="monthCalendar"><p class="muted small">暂无已结束的睡眠记录。</p></div>
+      </section>
+      <section class="card record-detail" id="monthRecordDetail"><p class="muted small" style="margin:0">点击有记录的日期查看详情。</p></section>
+    </div>
+
+    <!-- 日视图：重点看某一天的睡眠阶段时间轴。 -->
+    <div class="record-mode-panel" id="legacyRecordDayPanel" hidden>
+      <div class="section-title"><h2>阶段分布</h2></div>
+      <section class="card">
+        <div class="timeline">
+          <button class="stage light" style="flex:1.2" data-stage="23:46-00:38 浅睡 52分钟，平均心率64，呼吸15次/分">浅</button>
+          <button class="stage deep" style="flex:1.5" data-stage="00:38-01:42 深睡 64分钟，平均心率58，呼吸13次/分">深</button>
+          <button class="stage rem" style="flex:1.1" data-stage="01:42-02:29 REM 47分钟，平均心率62，呼吸14次/分">REM</button>
+          <button class="stage awake" style="flex:.35" data-stage="02:29-02:43 清醒 14分钟，翻身较多">醒</button>
+          <button class="stage light" style="flex:1.3" data-stage="02:43-03:39 浅睡 56分钟，平均心率63，呼吸14次/分">浅</button>
+          <button class="stage deep" style="flex:1.4" data-stage="03:39-04:39 深睡 60分钟，平均心率57，呼吸13次/分">深</button>
+          <button class="stage rem" style="flex:1.2" data-stage="04:39-05:30 REM 51分钟，平均心率65，呼吸15次/分">REM</button>
+          <button class="stage light" style="flex:1.6" data-stage="05:30-07:18 浅睡 108分钟，接近自然醒">浅</button>
+        </div>
+        <div class="legend"><span><i style="background:#4f7cff"></i>浅睡</span><span><i style="background:#8d5cff"></i>深睡</span><span><i style="background:#42d6ef"></i>REM</span><span><i style="background:#ff6d7d"></i>清醒</span></div>
+        <p class="muted small" id="recordStageDetail" style="margin:12px 0 0">点击某段睡眠时间轴，可查看开始时间、持续时长、平均心率和呼吸数据。</p>
+      </section>
+      <section class="card record-detail" id="legacyRecordDetail">
+        <h3>9月4日 睡眠记录</h3>
+        <p class="muted small">7小时32分 · 睡眠效率 91% · 设备工作正常</p>
+        <div class="record-meta"><div><b>42分</b><span class="tiny muted">音频助眠</span></div><div><b>2次</b><span class="tiny muted">硬件刺激</span></div></div>
+        <button class="secondary" data-open="report" style="margin-top:14px">查看完整分析</button>
+        <button class="secondary" data-open="questionnaires" style="margin-top:10px">查看问卷记录</button>
+      </section>
+    </div>
+
+    <!-- 周视图：用日历格展示本周每天的睡眠记录。 -->
+    <div class="record-mode-panel" id="legacyRecordWeekPanel" hidden>
+      <div class="section-title"><h2>本周日历</h2><span class="muted tiny">9月1日-9月7日</span></div>
+      <section class="card">
+        <div class="calendar-head"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="calendar">
+          <button class="day" type="button"><b>1</b><span>--</span></button>
+          <button class="day good" type="button" data-record="9-2"><b>2</b><span>94%</span></button>
+          <button class="day" type="button" data-record="9-3"><b>3</b><span>87%</span></button>
+          <button class="day active good" type="button" data-record="9-4"><b>4</b><span>91%</span></button>
+          <button class="day" type="button"><b>5</b><span>--</span></button>
+          <button class="day" type="button"><b>6</b><span>--</span></button>
+          <button class="day" type="button"><b>7</b><span>--</span></button>
+        </div>
+      </section>
+      <section class="card record-detail" id="legacyWeekRecordDetail">
+        <h3>9月4日 睡眠记录</h3>
+        <p class="muted small">7小时32分 · 睡眠效率 91% · 设备工作正常</p>
+        <div class="record-meta"><div><b>42分</b><span class="tiny muted">音频助眠</span></div><div><b>2次</b><span class="tiny muted">硬件刺激</span></div></div>
+        <button class="secondary" data-open="report" style="margin-top:14px">查看完整分析</button>
+        <button class="secondary" data-open="questionnaires" style="margin-top:10px">查看问卷记录</button>
+      </section>
+    </div>
+
+    <!-- 月视图：用日历格展示整月记录，点击某天更新下方详情。 -->
+    <div class="record-mode-panel" id="legacyRecordMonthPanel" hidden>
+      <div class="section-title"><h2>9月记录</h2><span class="muted tiny">按日期查看</span></div>
+      <section class="card">
+        <div class="calendar-head"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="calendar">
+          <button class="day" type="button"><b>31</b><span></span></button>
+          <button class="day" type="button"><b>1</b><span>--</span></button>
+          <button class="day good" type="button" data-record="9-2"><b>2</b><span>94%</span></button>
+          <button class="day" type="button" data-record="9-3"><b>3</b><span>87%</span></button>
+          <button class="day active good" type="button" data-record="9-4"><b>4</b><span>91%</span></button>
+          <button class="day" type="button"><b>5</b><span>--</span></button>
+          <button class="day" type="button"><b>6</b><span>--</span></button>
+          <button class="day" type="button"><b>7</b><span>--</span></button>
+          <button class="day" type="button"><b>8</b><span>--</span></button>
+          <button class="day" type="button"><b>9</b><span>--</span></button>
+          <button class="day" type="button"><b>10</b><span>--</span></button>
+          <button class="day" type="button"><b>11</b><span>--</span></button>
+          <button class="day" type="button"><b>12</b><span>--</span></button>
+          <button class="day" type="button"><b>13</b><span>--</span></button>
+          <button class="day" type="button"><b>14</b><span>--</span></button>
+        </div>
+      </section>
+      <section class="card record-detail" id="legacyMonthRecordDetail">
+        <h3>9月4日 睡眠记录</h3>
+        <p class="muted small">7小时32分 · 睡眠效率 91% · 设备工作正常</p>
+        <div class="record-meta"><div><b>42分</b><span class="tiny muted">音频助眠</span></div><div><b>2次</b><span class="tiny muted">硬件刺激</span></div></div>
+        <button class="secondary" data-open="report" style="margin-top:14px">查看完整分析</button>
+        <button class="secondary" data-open="questionnaires" style="margin-top:10px">查看问卷记录</button>
+      </section>
+    </div>
+  </div>
+</section>
+
+<!-- 设备页：展示睡眠枕连接、Wi-Fi、固件和模块状态。 -->
+<section class="view" id="device">
+  <header class="header"><div><p class="muted small">设备连接与管理</p><h1>设备</h1></div><button class="iconbtn" data-open="pairing">＋</button></header>
+  <!-- 设备主信息卡片：电量/信号等文案由 setDeviceState() 更新。 -->
+  <section class="card"><div class="device-top"><div class="pillow"></div><div class="grow"><span class="status warn" id="deviceMainStatus">电量偏低</span><h2 id="connectedDeviceName" style="margin-top:10px">SleepPillow-01</h2><p class="muted small" id="connectedDeviceAddress">SN: SP2600812</p><div style="margin-top:8px"><span class="value-pill" id="deviceBatteryPill">电量 18%</span> <span class="value-pill" id="deviceSignalPill">信号 86%</span></div></div></div></section>
+  <!-- 设备异常提醒：电量低、Wi-Fi失败、未绑定等都会复用这块。 -->
+  <section class="alert-stack">
+    <div class="alert warn" id="deviceAlert"><span>!</span><div><b id="deviceAlertTitle">电量不足</b><span id="deviceAlertText">建议充电后再开始整晚监测。</span></div></div>
+  </section>
+  <div class="section-title"><h2>连接状态</h2></div>
+  <!-- 连接状态列表：蓝牙、Wi-Fi、固件、同步状态。 -->
+  <section class="card">
+    <button class="listbtn" data-open="pairing"><div class="row"><div class="ico">ᛒ</div><div class="grow"><b>蓝牙连接</b><small id="bluetoothStateDetail">用于发现、绑定和实时控制</small></div><span class="state-text bad" id="bluetoothStateLabel">未连接 ›</span></div></button>
+    <button class="listbtn" data-open="wifi"><div class="row"><div class="ico cyan">⌁</div><div class="grow"><b>Wi‑Fi连接</b><small>用于校时、数据同步和固件升级</small></div><span class="state-text" id="wifiStateLabel">未连接 ›</span></div></button>
+    <div class="row"><div class="ico purple">▣</div><div class="grow"><b>固件版本</b><small>当前设备软件</small></div><span>v1.2.3</span></div>
+    <div class="row"><div class="ico">◷</div><div class="grow"><b>远程同步</b><small id="remoteSyncDetail">登录并选择设备后检查服务器数据</small></div><span class="state-text warn" id="remoteSyncLabel">待确认 ›</span></div>
+  </section>
+  <div class="section-title"><h2>模块状态</h2></div>
+  <!-- 模块状态：第一版强调“超声由硬件开关控制”。 -->
+  <section class="card">
+    <div class="row"><div class="ico purple">≈</div><div class="grow"><b>超声模块</b><small>硬件开关控制 · 固定 30 分钟</small></div><span class="value-pill">第一版</span></div>
+    <div class="row"><div class="ico cyan">⌁</div><div class="grow"><b>传感器区域</b><small id="sensorText">接触良好，可以稳定采集</small></div><span class="status" id="sensorStatus">良好</span></div>
+  </section>
+  <div class="section-title"><h2>设备维护与设置</h2></div>
+  <!-- 维护操作：有风险的操作通过 data-confirm 弹确认框。 -->
+  <section class="card">
+    <button class="listbtn" data-open="pairing"><div class="row"><div class="ico">＋</div><div class="grow"><b>绑定新设备</b></div><span>›</span></div></button>
+    <button class="listbtn" data-open="wifi"><div class="row"><div class="ico cyan">⌁</div><div class="grow"><b>Wi‑Fi设置</b></div><span>›</span></div></button>
+    <button class="listbtn" data-confirm="firmware"><div class="row"><div class="ico purple">↑</div><div class="grow"><b>固件升级</b><small>升级前将检查电量与 Wi‑Fi</small></div><span>›</span></div></button>
+    <button class="listbtn" data-confirm="unbind"><div class="row"><div class="ico" style="background:rgba(255,109,125,.14)">×</div><div class="grow"><b style="color:#ff9fab">解除绑定</b><small>解除后需重新添加设备</small></div><span>›</span></div></button>
+  </section>
+</section>
+
+<!-- 我的页：账号入口和个人相关菜单。 -->
+<section class="view" id="profile">
+  <header class="header"><div><p class="muted small">账号管理</p><h1>我的</h1></div></header>
+  <section class="card profile-head"><div class="avatar">张</div><div class="grow"><h2>张三</h2><p class="muted small">188 **** 1234</p></div><span>›</span></section>
+  <section class="card menu">
+    <button class="listbtn" data-open="profile-info"><div class="row"><div class="ico purple">●</div><div class="grow"><b>个人信息</b></div><span>›</span></div></button>
+    <button class="listbtn" data-open="device"><div class="row"><div class="ico">▱</div><div class="grow"><b>我的设备</b></div><span>›</span></div></button>
+    <button class="listbtn" data-open="about"><div class="row"><div class="ico purple">i</div><div class="grow"><b>关于我们</b></div><span>›</span></div></button>
+    <button class="listbtn" data-open="settings"><div class="row"><div class="ico">⚙</div><div class="grow"><b>设置</b></div><span>›</span></div></button>
+  </section>
+</section>
+
+<!-- 添加设备页：BLE 扫描和绑定流程的原型页面。 -->
+<section class="view" id="pairing">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>添加设备</h1><span style="width:42px"></span></header>
+  <section class="card scan"><div class="ble">ᛒ</div></section>
+  <h2 id="pairingTitle" style="text-align:center;margin-top:18px">正在搜索附近的设备…</h2><p class="muted small" id="pairingHint" style="text-align:center">请确保睡眠枕已开启，并靠近手机</p>
+  <section id="boundDevices" style="margin-top:18px"></section>
+  <section id="deviceCandidates" style="margin-top:12px"></section>
+  <section class="card" style="margin-top:18px"><form class="form" id="manualConnectForm"><label>设备 MAC 地址<input id="manualDeviceAddress" type="text" placeholder="扫描不到时输入设备 MAC 地址" required></label><label>设备名称（可选）<input id="manualDeviceName" type="text" placeholder="例如 SleepPillow" ></label><button class="secondary" type="submit">按地址连接</button></form></section>
+</section>
+
+<!-- 首次使用引导：摆放、权限、校准三个步骤。 -->
+<section class="view" id="onboarding">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>首次使用引导</h1><span style="width:42px"></span></header>
+  <section class="card guide-step"><div class="guide-num">1</div><div><h2>摆放睡眠枕</h2><p class="muted small">让传感器区域靠近颈肩位置，避免枕头悬空或被厚枕套隔开。</p></div></section>
+  <section class="card guide-step"><div class="guide-num">2</div><div><h2>确认权限</h2><p class="muted small">蓝牙用于绑定和实时控制，Wi‑Fi用于校时、同步数据和固件升级。</p></div></section>
+  <section class="card">
+    <div class="guide-step"><div class="guide-num">3</div><div><h2>摆放检测</h2><p class="muted small" id="calibrateText">当前摆放一般，建议躺好后点击检测。</p><div class="signal-bars" id="signalBars"><i></i><i></i><i></i><i></i></div></div></div>
+    <button class="primary" id="calibrationTest" style="margin-top:16px">开始检测</button>
+  </section>
+  <button class="secondary" id="finishGuide" style="margin-top:14px">完成引导并配置 Wi‑Fi</button>
+</section>
+
+<!-- Wi-Fi 配网页：通过 BLE 把 Wi-Fi 信息发送给睡眠枕。 -->
+<section class="view" id="wifi">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>Wi‑Fi联网与校时</h1><button class="iconbtn" data-info-details="wifi" type="button" title="查看 Wi-Fi 联网说明" aria-label="查看 Wi-Fi 联网说明">i</button></header>
+  <!-- 蓝牙连接与 Wi-Fi 配网是两步独立流程，必须分别展示真实状态。 -->
+  <section class="alert-stack"><div class="alert warn" id="wifiBleStatus"><span>ᛒ</span><div><b id="wifiBleStatusTitle">睡眠枕蓝牙未连接</b><span id="wifiBleStatusText">请先返回设备页，连接已绑定的睡眠枕。</span></div></div></section>
+  <!-- 配网结果紧跟说明提示：成功时显示 ESP32 实际回传的已连接 Wi-Fi 名称。 -->
+  <section class="alert-stack"><div class="alert warn" id="wifiStatus"><span>⌁</span><div><b>等待配置</b>请输入密码后通过蓝牙发送给睡眠枕。</div></div></section>
+  <form class="form" id="wifiForm" style="margin-top:14px"><label>Wi‑Fi名称<input id="wifiSsid" type="text" placeholder="请输入 2.4GHz Wi‑Fi 名称" required></label><label>Wi‑Fi密码<input id="wifiPassword" type="password" placeholder="请输入密码" required></label><button class="primary" id="wifiSubmit" type="submit">通过蓝牙发送并连接</button></form>
+</section>
+
+<!-- 实时监测页：开始睡眠后进入，显示运行时长、睡眠状态和结束按钮。 -->
+<section class="view" id="session">
+  <header class="subhead"><button class="back" data-back>‹</button><h1 id="sessionTitle">设备实时监测</h1><span class="status" id="sessionStatusBadge">等待设备</span></header>
+  <section class="card" style="text-align:center"><p class="muted small" id="sessionStageLabel">当前睡眠状态估计</p><div id="sessionStage" style="font-size:48px;font-weight:800;margin:10px">等待数据</div><p class="muted" id="sessionElapsedLabel">设备记录时长 <span id="sessionElapsed">00:00:00</span></p></section>
+  <section class="grid2" style="margin-top:12px">
+    <div class="metric"><small>实时心率</small><div><b>60</b> bpm</div></div>
+    <div class="metric"><small>实时呼吸</small><div><b>14</b> 次/分</div></div>
+  </section>
+  <div class="section-title"><h2>助眠状态</h2></div>
+  <section class="card">
+    <div class="row"><div class="ico purple">≈</div><div class="grow"><b>超声助眠</b><small id="sessionStimText">硬件固定模式 · 30分钟</small></div><span class="state-text good" id="sessionStimState">运行中</span></div>
+    <div class="row"><div class="ico cyan">♪</div><div class="grow"><b>音频助眠</b><small>细雨白噪声</small></div><span class="state-text good">运行中</span></div>
+  </section>
+  <button class="danger" id="endSleep" style="margin-top:16px">结束准备入睡</button>
+</section>
+
+<!-- 睡眠报告页：展示单晚睡眠分析、时间轴、趋势和解读。 -->
+<section class="view" id="report">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>睡眠报告</h1><span style="width:42px"></span></header>
+  <div id="realReportContent">
+    <section class="kpis">
+      <div class="kpi"><b id="reportDuration">--</b><span>睡眠时长</span></div><div class="kpi"><b id="reportStart">--</b><span>开始时间</span></div><div class="kpi"><b id="reportEnd">--</b><span>结束时间</span></div>
+    </section>
+    <div class="section-title"><h2>本次监测汇总</h2></div>
+    <section class="grid3 temperature-grid">
+      <div class="metric"><small>平均心率</small><div><b id="reportAverageHeart">--</b> bpm</div></div>
+      <div class="metric"><small>平均呼吸</small><div><b id="reportAverageRespiratory">--</b> 次/分</div></div>
+      <div class="metric"><small>平均温度</small><div><b id="reportAverageTemperature">--</b> °C</div></div>
+    </section>
+    <div class="section-title"><h2>睡眠阶段</h2></div>
+    <section class="card">
+      <div class="timeline" id="realReportStageTimeline"><span class="muted small">暂无阶段数据。</span></div>
+      <div class="legend"><span><i style="background:#4f7cff"></i>浅睡</span><span><i style="background:#8d5cff"></i>深睡</span><span><i style="background:#42d6ef"></i>REM</span><span><i style="background:#ff6d7d"></i>清醒</span></div>
+      <p class="muted small" id="realReportStageDetail" style="margin:12px 0 0">点击时间轴查看该阶段的实际采集时间。</p>
+    </section>
+    <div class="section-title"><h2>数据完整性</h2></div>
+    <section class="card" id="reportDataDetail"><p class="muted small" style="margin:0">正在等待服务器生成睡眠报告。</p></section>
+    <div class="section-title"><h2>最近 7 天</h2></div>
+    <section class="card" id="reportWeekList"><p class="muted small" style="margin:0">暂无已结束的睡眠记录。</p></section>
+    <button class="secondary" data-open="questionnaires" style="margin-top:14px">填写晨起问卷</button>
+  </div>
+  <div hidden>
+  <section class="kpis">
+    <div class="kpi"><b>7h32</b><span>总睡眠</span></div><div class="kpi"><b>91%</b><span>效率</span></div><div class="kpi"><b>2次</b><span>夜间清醒</span></div>
+  </section>
+  <div class="section-title"><h2>睡眠状态估计</h2></div>
+  <section class="card">
+    <div class="timeline">
+      <button class="stage light" style="flex:1.2" data-stage="23:46-00:38 浅睡 52分钟，平均心率64，呼吸15次/分">浅</button>
+      <button class="stage deep" style="flex:1.5" data-stage="00:38-01:42 深睡 64分钟，平均心率58，呼吸13次/分">深</button>
+      <button class="stage rem" style="flex:1.1" data-stage="01:42-02:29 REM 47分钟，平均心率62，呼吸14次/分">REM</button>
+      <button class="stage awake" style="flex:.35" data-stage="02:29-02:43 清醒 14分钟，翻身较多">醒</button>
+      <button class="stage light" style="flex:1.3" data-stage="02:43-03:39 浅睡 56分钟，平均心率63，呼吸14次/分">浅</button>
+      <button class="stage deep" style="flex:1.4" data-stage="03:39-04:39 深睡 60分钟，平均心率57，呼吸13次/分">深</button>
+      <button class="stage rem" style="flex:1.2" data-stage="04:39-05:30 REM 51分钟，平均心率65，呼吸15次/分">REM</button>
+      <button class="stage light" style="flex:1.6" data-stage="05:30-07:18 浅睡 108分钟，接近自然醒">浅</button>
+    </div>
+    <div class="legend"><span><i style="background:#4f7cff"></i>浅睡</span><span><i style="background:#8d5cff"></i>深睡</span><span><i style="background:#42d6ef"></i>REM</span><span><i style="background:#ff6d7d"></i>清醒</span></div>
+    <p class="muted small" id="stageDetail" style="margin:12px 0 0">点击某段睡眠时间轴，可查看开始时间、持续时长、平均心率和呼吸数据。</p>
+  </section>
+  <div class="section-title"><h2>夜间平均</h2></div>
+  <section class="grid2"><div class="metric"><small>心率</small><div><b>61</b> bpm</div></div><div class="metric"><small>呼吸</small><div><b>14</b> 次/分</div></div></section>
+  <div class="section-title"><h2>报告解读</h2></div>
+  <section class="card insights">
+    <div class="insight"><b>睡眠效率较好</b><p class="muted small" style="margin:0">本次睡眠效率 91%，高于近 7 天平均值 87%。说明躺床后真正入睡的比例有所改善。</p></div>
+    <div class="insight"><b>深睡集中在前半夜</b><p class="muted small" style="margin:0">深睡段主要出现在 00:38-04:39，符合常见睡眠节律。若连续下降，可关注压力和作息。</p></div>
+    <div class="insight"><b>异常波动提示</b><p class="muted small" style="margin:0">02:29 附近出现一次短暂清醒，伴随翻身增多，建议结合晨起问卷判断是否影响主观体验。</p></div>
+  </section>
+  <div class="section-title"><h2>周趋势</h2></div>
+  <section class="card"><div style="height:92px;display:flex;align-items:end;gap:8px">
+    <i style="height:54%;flex:1;background:#4f7cff;border-radius:7px 7px 0 0"></i><i style="height:68%;flex:1;background:#42d6ef;border-radius:7px 7px 0 0"></i><i style="height:61%;flex:1;background:#4f7cff;border-radius:7px 7px 0 0"></i><i style="height:45%;flex:1;background:#ffc05d;border-radius:7px 7px 0 0"></i><i style="height:74%;flex:1;background:#42d6ef;border-radius:7px 7px 0 0"></i><i style="height:63%;flex:1;background:#4f7cff;border-radius:7px 7px 0 0"></i><i style="height:70%;flex:1;background:#8d5cff;border-radius:7px 7px 0 0"></i>
+  </div><p class="muted tiny" style="margin:10px 0 0">近 7 天睡眠效率趋势，颜色用于提示稳定、改善或需关注。</p></section>
+  <div class="section-title"><h2>助眠使用</h2></div>
+  <section class="card"><div class="row"><div class="ico purple">≈</div><div class="grow"><b>超声助眠</b><small>固定刺激执行 2 次</small></div></div><div class="row"><div class="ico cyan">♪</div><div class="grow"><b>音频助眠</b><small>白噪声 42 分钟 · 自定义音乐 18 分钟</small></div></div></section>
+  <button class="secondary" data-open="questionnaires" style="margin-top:14px">填写晨起问卷</button>
+  </div>
+</section>
+
+<!-- 问卷中心：每日睡眠日记按睡前日期归档；PSQI 仅在实验前后各填写一次。 -->
+<section class="view" id="questionnaires">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>问卷中心</h1><span style="width:42px"></span></header>
+  <p class="note">问卷会提交到项目服务器。睡前与次日醒后问卷归为同一个睡眠夜，统一按睡前日期保存；PSQI 仅在实验前、实验后各填写一次。</p>
+  <section class="card mini-form">
+    <div class="line"><label><b>睡前问卷提醒</b><small class="muted">每天到点提醒填写</small></label><input id="bedReminder" type="time" value="22:30"></div>
+    <div class="line"><label><b>晨起问卷提醒</b><small class="muted">起床后记录主观感受</small></label><input id="morningReminder" type="time" value="07:30"></div>
+    <button class="secondary" id="saveReminder" type="button">保存提醒</button>
+    <p class="muted small" id="reminderStatus" style="margin:0">尚未检查系统提醒状态。</p>
+    <div class="grid2"><button class="secondary" id="checkReminderPermission" type="button">检查提醒权限</button><button class="secondary" id="sendReminderTest" type="button">发送测试通知</button><button class="secondary" id="scheduleReminderTest" type="button">2分钟后定时测试</button><button class="secondary" id="allowBackgroundReminder" type="button">解除后台限制</button></div>
+  </section>
+  <div class="section-title"><h2>每日睡眠日记</h2></div>
+  <section class="survey-card">
+    <div class="top"><h2>睡前填写</h2><span class="badge" id="dailyOneBadge">今晚</span></div>
+    <p>每天入睡前填写一次，用于记录睡前状态、压力感受和当晚准备使用睡眠枕的情况。该日期就是本次睡眠夜的归档日期。</p>
+    <div class="survey-frequency"><span>每天 1 次</span><span>睡前填写</span><span>睡眠夜开始</span></div>
+    <div class="survey-actions" style="grid-template-columns:1fr">
+      <button type="button" data-questionnaire-form="pre_sleep">填写今日睡前问卷</button>
+    </div>
+  </section>
+  <section class="survey-card">
+    <div class="top"><h2>醒后填写</h2><span class="badge" id="dailyTwoBadge">昨夜</span></div>
+    <p>每天醒来后填写一次，用于记录晨起精神状态和夜间体验。它会和昨晚的睡前问卷归到同一个睡眠夜。</p>
+    <div class="survey-frequency"><span>每天 1 次</span><span>醒后填写</span><span>归入昨夜</span></div>
+    <div class="survey-actions" style="grid-template-columns:1fr">
+      <button type="button" data-questionnaire-form="post_wake">填写昨夜醒后问卷</button>
+    </div>
+  </section>
+  <div class="section-title"><h2>实验量表</h2></div>
+  <section class="survey-card">
+    <div class="top"><h2>PSQI 评分表</h2><span class="badge" id="psqiBadge">实验前/后</span></div>
+    <p>实验周期前填写一次，实验结束后再填写一次，用于对比干预前后的睡眠质量变化。不参与每日提醒和每日完成状态。</p>
+    <div class="survey-frequency"><span>实验前 1 次</span><span>实验后 1 次</span><span>后台计算总分</span></div>
+    <div class="survey-actions" style="margin-top:12px">
+      <button type="button" data-questionnaire-form="psqi_before">填写实验前测</button>
+      <button type="button" data-questionnaire-form="psqi_after">填写实验后测</button>
+    </div>
+  </section>
+</section>
+
+<!-- 动态问卷页：题目来源于原有三份问卷星问卷，提交后只保存在项目服务器。 -->
+<section class="view" id="questionnaire-form">
+  <header class="subhead"><button class="back" data-back>‹</button><h1 id="questionnaireFormTitle">填写问卷</h1><span style="width:42px"></span></header>
+  <p class="note" id="questionnaireFormDescription"></p>
+  <form class="card questionnaire-form" id="questionnaireForm" novalidate>
+    <div id="questionnaireFields"></div>
+    <p class="muted small" id="questionnaireSubmitStatus" style="margin:0"></p>
+    <button class="primary" id="questionnaireSubmit" type="submit">提交问卷</button>
+  </form>
+</section>
+
+<!-- 个人信息页：当前是静态原型，后续可接账号资料接口。 -->
+<section class="view" id="profile-info">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>个人信息</h1><span style="width:42px"></span></header>
+  <form class="form"><label>姓名 / 昵称<input value="张三"></label><label>手机号<input value="188 **** 1234" readonly></label></form>
+</section>
+
+<!-- 关于我们页：用于说明产品/项目背景。 -->
+<section class="view" id="about">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>关于我们</h1><span style="width:42px"></span></header>
+  <section class="card"><h2>智能睡眠枕</h2><p class="muted small">集成睡眠状态监测、心率/呼吸提取、音频助眠与超声助眠的工程原型系统。</p><p class="muted small">当前页面用于产品与交互设计参考。</p></section>
+</section>
+
+<!-- 设置页：显示模式、适老化、作息目标、同步和调试入口。 -->
+<section class="view" id="settings">
+  <header class="subhead"><button class="back" data-back>‹</button><h1>设置</h1><span style="width:42px"></span></header>
+  <div class="section-title"><h2>显示与适老化</h2></div>
+  <section class="card">
+    <div class="row"><div class="grow"><b>界面模式</b><small>切换日间/夜间背景颜色，适配白天查看和夜间使用</small></div><span class="value-pill" id="themeLabel">夜间版</span></div>
+    <div class="segmented theme-choice"><button class="active" data-theme="night">夜间版</button><button data-theme="day">日间版</button></div>
+    <div class="row"><div class="grow"><b>大字体</b><small>提升长辈或低视力用户可读性</small></div><label class="toggle-row"><input id="largeFont" type="checkbox"></label></div>
+    <div class="row"><div class="grow"><b>长辈简洁模式</b><small>减少复杂信息，突出开始睡眠和报告</small></div><label class="toggle-row"><input id="elderMode" type="checkbox"></label></div>
+  </section>
+  <div class="section-title"><h2>作息目标</h2></div>
+  <section class="card mini-form">
+    <div class="line"><label><b>目标入睡</b><small class="muted">用于睡前提醒</small></label><input id="targetBed" type="time" value="23:00"></div>
+    <div class="line"><label><b>目标起床</b><small class="muted">用于晨起反馈</small></label><input id="targetWake" type="time" value="07:00"></div>
+    <div class="line"><label><b>目标时长</b><small class="muted">推荐 7-8 小时</small></label><select id="targetDuration"><option>7小时</option><option selected>7.5小时</option><option>8小时</option></select></div>
+    <button class="secondary" id="saveGoals" type="button">保存作息目标</button>
+  </section>
+  <section class="card">
+    <div class="row"><div class="grow"><b>消息提醒</b><small>睡前提醒、报告完成提醒</small></div><span>开启</span></div>
+    <div class="row"><div class="grow"><b>自动同步</b><small>连接Wi‑Fi后上传睡眠记录</small></div><span>开启</span></div>
+    <div class="row"><div class="grow"><b>隐私与权限</b></div><span>›</span></div>
+  </section>
+  <div class="section-title"><h2>演示/调试</h2></div>
+  <!-- 演示/调试按钮：只用于切换原型状态，不代表真实硬件上报。 -->
+  <section class="card">
+    <p class="muted small">这些按钮只用于原型演示，后续接入真实睡眠枕后会由设备自动上报状态。</p>
+    <div class="grid2">
+      <button class="secondary" data-device-state="lowBattery">电量不足</button>
+      <button class="secondary" data-device-state="wifiFail">Wi‑Fi失败</button>
+      <button class="secondary" data-device-state="weakSignal">信号偏弱</button>
+      <button class="secondary" data-device-state="normal">恢复正常</button>
+    </div>
+  </section>
+</section>
+
+<!-- 底部主导航：只在 home/sleep/device/profile 四个主页面显示。 -->
+<nav class="bottom" id="bottomNav" hidden>
+  <button data-view="home" class="active"><span class="navico">⌂</span><span>首页</span></button>
+  <button data-view="sleep"><span class="navico">☾</span><span>助眠</span></button>
+  <button data-view="device"><span class="navico">▱</span><span>设备</span></button>
+  <button data-view="profile"><span class="navico">○</span><span>我的</span></button>
+</nav>
+
+<!-- Toast 轻提示：JS 的 toast(msg) 会把文字写到这里并短暂显示。 -->
+<div class="toast" id="toast"></div>
+
+<!-- 通用确认弹窗：开始睡眠、结束睡眠、固件升级、解除绑定都复用这一套。 -->
+<div class="modal" id="confirmModal" aria-hidden="true">
+  <section class="dialog" id="confirmDialog">
+    <h2 id="confirmTitle">确认操作</h2>
+    <p id="confirmBody">请确认是否继续。</p>
+    <div class="dialog-actions">
+      <button class="cancel" id="confirmCancel" type="button">取消</button>
+      <button class="ok" id="confirmOk" type="button">确认</button>
+    </div>
+  </section>
+</div>
+
+<!-- 首页右上角“详情”：把时间和同步说明收纳起来，首页只保留关键生理数值。 -->
+<div class="modal" id="realtimeDetailsModal" aria-hidden="true">
+  <section class="dialog" aria-labelledby="realtimeDetailsTitle">
+    <h2 id="realtimeDetailsTitle">实时睡眠数据详情</h2>
+    <p id="realtimeDetailsSummary">登录并选择智能助眠枕后，可查看服务器最近收到的记录。</p>
+    <div class="realtime-detail-list">
+      <div><span>采样时间（中国时间）</span><b id="realtimeSampleTime">--</b></div>
+      <div><span>服务器收到时间</span><b id="realtimeReceivedTime">--</b></div>
+      <div><span>数据刷新</span><b>每 20 秒自动检查</b></div>
+    </div>
+    <div class="dialog-actions" style="grid-template-columns:1fr"><button class="ok" id="realtimeDetailsClose" type="button">知道了</button></div>
+  </section>
+</div>
+
+<!-- 配网和超声工作原理属于低频说明，统一收纳到详情面板，避免干扰主要操作。 -->
+<div class="modal" id="infoDetailsModal" aria-hidden="true">
+  <section class="dialog" aria-labelledby="infoDetailsTitle">
+    <h2 id="infoDetailsTitle">详情</h2>
+    <p id="infoDetailsSummary"></p>
+    <div class="realtime-detail-list" id="infoDetailsList"></div>
+    <div class="dialog-actions" style="grid-template-columns:1fr"><button class="ok" id="infoDetailsClose" type="button">知道了</button></div>
+  </section>
+</div>
+</main>
+
+<script>
+// 这里用立即执行函数包住所有 JS，避免变量污染全局环境。
+// 你可以把这部分理解成“页面行为总控制器”：负责切页、按钮点击、计时、状态保存。
+(()=>{
+// 所有页面 section.view 的集合，open(id) 会在这些页面之间切换 active。
+const views=[...document.querySelectorAll('.view')];
+// 底部导航栏，以及里面四个主页面按钮。
+const nav=document.getElementById('bottomNav');
+const navBtns=[...nav.querySelectorAll('[data-view]')];
+// 只有这些主页面显示底部导航，登录页、报告页、设置页等二级页面不显示。
+const mainViews=new Set(['home','sleep','device','profile']);
+// 页面运行时状态：
+// current/stack 控制返回栈；deviceState 是演示设备状态；
+// stim* 是超声助眠 30 分钟计时；sleep* 是本次睡眠记录计时。
+let current='login', stack=[], toastTimer, confirmAction=null, confirmCancelAction=null, deviceState='lowBattery', stimInterval=null, sleepInterval=null, wifiStatusTimer=null, stimRemaining=1800, stimEndAt=Number(localStorage.getItem('sleep-pillow-stim-end')||0), stimState=localStorage.getItem('sleep-pillow-stim-state')||'idle', sleepSessionActive=localStorage.getItem('sleep-pillow-session-active')==='1', sleepStartedAt=Number(localStorage.getItem('sleep-pillow-session-start')||0), deviceRecordingActive=false, deviceRecordingStartedAt=0, deviceRecordingLastSampleAt=0, connectedBleDevice=null, pendingBleDevice=null, wifiStateVerifiedForCurrentBleSession=false;
+const discoveredDevices=new Map();
+// App 只保存最后一次配网结果和 SSID，用于重开页面后展示；Wi-Fi 密码绝不保存到 App。
+const savedWifiState=localStorage.getItem('sleep-pillow-wifi-state')||'idle';
+let wifiConnection={state:savedWifiState,ssid:localStorage.getItem('sleep-pillow-wifi-ssid')||''};
+let boundDevices=[];try{boundDevices=JSON.parse(localStorage.getItem('sleep-pillow-bound-devices')||'[]')}catch(error){boundDevices=[]}
+
+// 睡眠报告由服务器根据 ESP32 的真实采样数据返回，页面不再使用示例睡眠数据。
+// 日、周、月各自保留浏览位置。这样在周/月点开旧日期后，切回“日”不会误用那一条记录。
+let sleepReports={latest:null,lastNight:null,week:[],month:[],anchorDate:null};
+let homeSleepReports=null;
+let reportViews={day:null,week:null,month:null};
+let activeRecordRange='day';
+// 每一种报告视图都有独立的异步请求。保留加载状态可防止连续点箭头时，旧请求覆盖新日期。
+let reportPeriodLoading={day:false,week:false,month:false};
+
+// 常用工具：通过 id 找元素，少写一点 document.getElementById。
+function byId(id){return document.getElementById(id)}
+
+// 根据当前页面决定底部导航是否显示，并更新哪个 Tab 高亮。
+function setNav(id){nav.hidden=!mainViews.has(id);navBtns.forEach(b=>b.classList.toggle('active',b.dataset.view===id))}
+
+// 页面切换函数：所有 data-open、底部导航、返回逻辑最后都会调用它。
+function open(id,fromBack=false){
+ const el=byId(id);if(!el)return;
+ if(!fromBack&&current!==id)stack.push(current);
+ views.forEach(v=>v.classList.toggle('active',v.id===id));
+ current=id;setNav(id);window.scrollTo(0,0)
+ if(id==='pairing'&&!fromBack)startBleScan()
+}
+
+// 返回上一页；如果没有上一页，就回首页。
+function back(){open(stack.pop()||'home',true)}
+
+// 底部轻提示，例如“登录成功”“已保存目标”等。
+function toast(msg){const t=byId('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1800)}
+
+// 通知 Android 原生层。只有在 Android WebView 里运行时 window.SleepPillowNative 才存在。
+// 浏览器预览时不存在这个对象，所以 try/catch 会安静跳过。
+function notifyNative(eventName,payload={}){
+ try{
+  const bridge=window.SleepPillowNative;
+  if(bridge&&typeof bridge.onPrototypeEvent==='function')bridge.onPrototypeEvent(eventName,JSON.stringify(payload))
+ }catch(error){}
+}
+
+// 配对和配网必须经 Android 原生层调用 BLE；浏览器预览仍保留页面原型，不会伪造设备已连接。
+function startBleScan(){
+ discoveredDevices.clear();byId('deviceCandidates').replaceChildren();renderBoundDevices();byId('pairingTitle').textContent='正在搜索附近的设备…';byId('pairingHint').textContent='请确保睡眠枕已开启，并靠近手机';
+ notifyNative('ble_scan')
+}
+
+function sameBleAddress(first,second){return Boolean(first&&second&&first.toUpperCase()===second.toUpperCase())}
+
+function uniqueBoundDevices(){
+ const unique=new Map();
+ boundDevices.forEach(device=>{if(device&&device.address)unique.set(device.address.toUpperCase(),device)});
+ return [...unique.values()]
+}
+
+function renderBoundDevices(){
+ const root=byId('boundDevices');root.replaceChildren();
+ const devices=uniqueBoundDevices();
+ if(devices.length===0)return;
+ const heading=document.createElement('div');heading.className='section-title';
+ const title=document.createElement('h2');title.textContent='我的睡眠枕';heading.append(title);root.append(heading);
+ devices.forEach(device=>{
+  const card=document.createElement('section');card.className='card';
+  const button=document.createElement('button');button.className='listbtn';button.type='button';
+  const row=document.createElement('div');row.className='row';const info=document.createElement('div');info.className='grow';
+  const name=document.createElement('b');name.textContent=device.name||'睡眠枕';const detail=document.createElement('small');
+  const isConnected=connectedBleDevice&&sameBleAddress(device.address,connectedBleDevice.address);
+  detail.textContent=(isConnected?'当前已连接 · ':'已绑定，未连接 · ')+device.address+(device.deviceId?' · '+device.deviceId:'');
+  const action=document.createElement('span');action.textContent=isConnected?'已连接':'连接 ›';action.className=isConnected?'state-text good':'';
+  info.append(name,detail);row.append(info,action);button.append(row);card.append(button);root.append(card);
+  button.addEventListener('click',()=>isConnected?toast('睡眠枕当前已通过蓝牙连接'):connectDevice(device));
+ })
+}
+
+function connectDevice(device){
+ pendingBleDevice={name:device.name||'睡眠枕',address:device.address};
+ byId('pairingTitle').textContent='正在连接 '+pendingBleDevice.name+'…';byId('pairingHint').textContent=pendingBleDevice.address;
+ notifyNative('ble_connect',{address:pendingBleDevice.address})
+}
+
+// 广播包可能没有名称；保留全部附近设备供选择，但已绑定设备会在此处按 MAC 去重。
+function renderDeviceCandidates(){
+ const root=byId('deviceCandidates');root.replaceChildren();
+ const boundAddresses=new Set(uniqueBoundDevices().map(device=>device.address.toUpperCase()));
+ const candidates=[...discoveredDevices.values()].filter(device=>!boundAddresses.has((device.address||'').toUpperCase())).sort((a,b)=>(b.matchesSleepPillow===true)-(a.matchesSleepPillow===true)).slice(0,12);
+ if(candidates.length===0)return;
+ const heading=document.createElement('div');heading.className='section-title';
+ const title=document.createElement('h2');title.textContent='附近蓝牙设备';heading.append(title);root.append(heading);
+ candidates.forEach(device=>{
+  const card=document.createElement('section');card.className='card';card.style.marginTop='10px';
+  const button=document.createElement('button');button.className='listbtn';button.type='button';
+  const row=document.createElement('div');row.className='row';
+  const info=document.createElement('div');info.className='grow';
+  const title=document.createElement('b');title.textContent=device.name||'未命名 BLE 设备';
+  const detail=document.createElement('small');detail.textContent=(device.matchesSleepPillow?'疑似睡眠枕 · 可验证连接':'其他蓝牙设备 · 连接后验证')+' · '+(device.address||'未知地址')+(typeof device.rssi==='number'?' · '+device.rssi+' dBm':'');
+  const action=document.createElement('span');action.textContent=device.matchesSleepPillow?'连接睡眠枕 ›':'验证 ›';
+  info.append(title,detail);row.append(info,action);button.append(row);card.append(button);root.append(card);
+  button.addEventListener('click',()=>connectDevice(device));
+ })
+}
+
+function setWifiStatus(type,title,text){
+ const status=byId('wifiStatus');status.className=type==='bad'?'alert bad':type==='good'?'alert good':'alert warn';status.innerHTML='<span>'+(type==='bad'?'!':type==='good'?'✓':'⌁')+'</span><div><b></b><span></span></div>';status.querySelector('b').textContent=title;status.querySelector('span').textContent=text
+}
+
+function renderWifiBleStatus(){
+ const status=byId('wifiBleStatus'),title=byId('wifiBleStatusTitle'),text=byId('wifiBleStatusText'),submit=byId('wifiSubmit');
+ if(!status||!title||!text||!submit)return;
+ if(connectedBleDevice){
+  status.className='alert good';title.textContent='睡眠枕蓝牙已连接';text.textContent=(connectedBleDevice.name||'睡眠枕')+' · '+(connectedBleDevice.address||'GATT 通道已就绪');submit.disabled=false;
+ }else{
+  status.className='alert warn';title.textContent='睡眠枕蓝牙未连接';text.textContent='请先返回设备页，连接已绑定的睡眠枕。';submit.disabled=true;
+ }
+}
+
+// 更新当前网络状态。ssid 为空时保留上一次已知名称，避免“正在连接”时界面名称闪回默认值。
+function setWifiConnection(state,ssid=''){
+ wifiConnection={state,ssid:ssid||wifiConnection.ssid||''};
+ if(state!=='connecting'&&wifiStatusTimer){clearTimeout(wifiStatusTimer);wifiStatusTimer=null}
+ localStorage.setItem('sleep-pillow-wifi-state',wifiConnection.state);
+ if(wifiConnection.ssid)localStorage.setItem('sleep-pillow-wifi-ssid',wifiConnection.ssid);
+ applyWifiConnectionState()
+}
+
+// 设备页和首页共用这一处渲染逻辑：只有收到 ESP32 的成功通知后才显示具体 Wi-Fi 名称。
+function applyWifiConnectionState(){
+ const ssid=wifiConnection.ssid||'该网络';const state=wifiConnection.state;
+ const label=byId('wifiStateLabel'),alert=byId('deviceAlert'),title=byId('deviceAlertTitle'),text=byId('deviceAlertText'),main=byId('deviceMainStatus');
+ const homeWifi=byId('homeWifiCheck'),wifiAlert=byId('homeWifiAlert');
+ // Wi-Fi 成功结果只在本次真实 BLE 连接中由 ESP32 再次确认后才能展示。
+ // 手机与设备断开或 App 重启后，旧缓存仅保留 SSID，不代表设备此刻仍在线。
+ if(!connectedBleDevice||!wifiStateVerifiedForCurrentBleSession){
+  label.textContent='状态待确认 ›';label.className='state-text warn';
+  homeWifi.className='check warn';homeWifi.innerHTML='<b>Wi-Fi 状态待确认</b>请连接睡眠枕后确认';
+  wifiAlert.hidden=true;return
+ }
+ if(state==='connecting'){
+  label.textContent='正在连接 ›';label.className='state-text warn';main.className='status warn';main.textContent='联网中';
+  alert.className='alert warn';title.textContent='正在连接 Wi-Fi';text.textContent='睡眠枕正在连接 '+ssid+'，请等待设备返回联网结果。';
+  homeWifi.className='check warn';homeWifi.innerHTML='<b>Wi-Fi 联网中</b>'+ssid;wifiAlert.hidden=true;return
+ }
+ if(state==='connected'){
+  label.textContent=ssid+' ›';label.className='state-text good';main.className='status';main.textContent='已连接';
+  alert.className='alert';title.textContent='Wi-Fi 已连接';text.textContent='睡眠枕已联网，数据可以同步到服务器。';
+  homeWifi.className='check';homeWifi.innerHTML='<b>Wi-Fi 已连</b>'+ssid;wifiAlert.hidden=true;return
+ }
+ if(state==='failed'){
+  label.textContent='连接失败 ›';label.className='state-text bad';main.className='status bad';main.textContent='需处理';
+  alert.className='alert bad';title.textContent='Wi-Fi 连接失败';text.textContent='无法连接 '+ssid+'，本地数据会先保存在设备中。';
+  homeWifi.className='check bad';homeWifi.innerHTML='<b>Wi-Fi 失败</b>等待重新连接';wifiAlert.hidden=false;return
+ }
+ label.textContent='未连接 ›';label.className='state-text';
+ homeWifi.className='check';homeWifi.innerHTML='<b>Wi-Fi 未连接</b>尚未完成配置';wifiAlert.hidden=true;
+}
+
+function renderBleConnection(){
+ const device=connectedBleDevice||{name:'SleepPillow-01',address:'未绑定'};
+ byId('connectedDeviceName').textContent=device.name||'SleepPillow';
+ byId('connectedDeviceAddress').textContent=(device.address||'未绑定设备')+(device.deviceId?' · '+device.deviceId:'');
+ const label=byId('bluetoothStateLabel'),detail=byId('bluetoothStateDetail');
+ if(connectedBleDevice){label.textContent='已连接 ›';label.className='state-text good';detail.textContent=(connectedBleDevice.address||'')+' · App 内蓝牙连接'}
+ else{
+  label.textContent='未连接 ›';label.className='state-text bad';detail.textContent='请给睡眠枕供电并重新连接';
+  // 断电或超出蓝牙范围时，不能继续保留上一次的电量、信号和 Wi-Fi 成功状态。
+  byId('deviceMainStatus').className='status bad';byId('deviceMainStatus').textContent='蓝牙未连接';
+  byId('deviceAlert').className='alert bad';byId('deviceAlertTitle').textContent='睡眠枕已离线';byId('deviceAlertText').textContent='蓝牙连接已断开，设备的 Wi-Fi 状态需要重新连接后确认。';
+  byId('deviceBatteryPill').textContent='电量 --';byId('deviceSignalPill').textContent='信号 --';
+  byId('homeDeviceStatus').className='status bad';byId('homeDeviceStatus').textContent='睡眠枕未连接';
+  byId('homeStatusTitle').textContent='睡眠枕蓝牙未连接';byId('homeStatusDesc').textContent='请给睡眠枕供电并重新建立蓝牙连接。';
+  byId('homeBluetoothCheck').className='check bad';byId('homeBluetoothCheck').innerHTML='<b>蓝牙未连接</b>无法确认设备实时状态';
+ }
+ renderWifiBleStatus()
+}
+
+// 由 Android 的 SleepPillowBleManager 回调，payload 保持 JSON 字符串避免脚本拼接风险。
+function onBleEvent(eventName,payloadJson){
+ let data={};try{data=JSON.parse(payloadJson||'{}')}catch(error){}
+ const message=data.message||data.raw||'';
+ if(eventName==='scan_started'){byId('pairingTitle').textContent='正在搜索附近的设备…';return}
+ if(eventName==='device_found'){
+  if(data.address)discoveredDevices.set(data.address,data);renderDeviceCandidates();const boundAddresses=new Set(uniqueBoundDevices().map(device=>device.address.toUpperCase()));const nearby=[...discoveredDevices.values()].filter(device=>!boundAddresses.has((device.address||'').toUpperCase())).length;byId('pairingTitle').textContent='发现 '+nearby+' 台附近蓝牙设备';byId('pairingHint').textContent='“我的睡眠枕”是已绑定设备；下方其他设备需验证后才能作为睡眠枕连接。';return
+ }
+ if(eventName==='scan_finished'&&discoveredDevices.size===0){byId('pairingTitle').textContent='未发现蓝牙设备';byId('pairingHint').textContent='请检查附近设备权限、手机蓝牙和智能助眠枕电源';return}
+ if(eventName==='connecting'||eventName==='connected'){byId('pairingTitle').textContent=message||'正在连接睡眠枕…';return}
+ if(eventName==='device_name'){
+  if(pendingBleDevice){pendingBleDevice.name=message;renderBleConnection()}
+  return
+ }
+ if(eventName==='ready'){
+ connectedBleDevice=pendingBleDevice||{name:'睡眠枕',address:''};
+  wifiStateVerifiedForCurrentBleSession=false;
+  boundDevices=[...boundDevices.filter(device=>device.address!==connectedBleDevice.address),connectedBleDevice];
+  // 已绑定设备可跨 App 重启保留；实际 GATT 连接只能由 Android 回调确认，不能本地伪恢复。
+  localStorage.removeItem('sleep-pillow-connected-device');localStorage.setItem('sleep-pillow-bound-devices',JSON.stringify(boundDevices));
+  renderBleConnection();setDeviceState('normal');applyWifiConnectionState();
+ // 蓝牙就绪后立即查询 ESP32 的真实联网状态，覆盖 App 仅本地保存的旧状态。
+  notifyNative('ble_get_wifi_status');
+  // 同时由实物 ESP32 返回硬件 deviceId。后续账号系统只会用此真实回传值保存“当前设备”。
+  notifyNative('ble_get_device_info');toast('蓝牙连接成功');open('device');return
+ }
+ if(eventName==='provisioning_sending'){
+  setWifiConnection('connecting');setWifiStatus('warn','正在连接 Wi-Fi',message);
+  if(wifiStatusTimer)clearTimeout(wifiStatusTimer);
+  wifiStatusTimer=setTimeout(()=>{
+   if(wifiConnection.state==='connecting'){
+    setWifiConnection('failed');setWifiStatus('bad','未收到联网结果','请检查睡眠枕是否仍保持蓝牙连接，以及热点是否开启 2.4 GHz。');
+   }
+  },22000);
+  return
+ }
+ if(eventName==='provisioning_status'){
+  const parts=(data.status||message).split('|');const state=parts[0].toLowerCase();const reportedSsid=parts.slice(1).join('|').trim();const failed=/fail|error|wrong|invalid|断开|失败/.test(state);const succeeded=/wifi_connected|wifi_connect_success|wifi_ok|success|online|成功|已连接/.test(state);const notConnected=/wifi_not_connected|not_connected/.test(state);const connecting=/connecting|configuring|正在连接/.test(state);
+ if(state==='device_info'){
+   const deviceId=(parts[1]||'').trim();
+   if(deviceId){
+    connectedBleDevice={...(connectedBleDevice||{}),deviceId};
+   boundDevices=boundDevices.map(device=>sameBleAddress(device.address,connectedBleDevice.address)?{...device,deviceId}:device);
+   localStorage.setItem('sleep-pillow-bound-devices',JSON.stringify(boundDevices));
+   renderBleConnection();renderBoundDevices();
+    // 仅在 ESP32 通过当前真实 GATT 连接回传 deviceId 后，才让服务器更新账号当前设备。
+    notifyNative('server_select_current_device',{deviceId});
+  }
+  return
+  }
+  wifiStateVerifiedForCurrentBleSession=true;
+  // 新版 ESP32 回传格式为 WIFI_CONNECTED|SSID，App 取该 SSID 更新并持久化显示名称。
+  if(succeeded&&!failed){setWifiConnection('connected',reportedSsid);setWifiStatus('good','Wi-Fi配置成功',reportedSsid?'已连接 '+reportedSsid:'睡眠枕已连接网络。');toast('Wi-Fi配置成功');setTimeout(()=>open('device'),600)}
+  else if(notConnected){setWifiConnection('idle');setWifiStatus('warn','Wi-Fi 未连接','睡眠枕当前未连接 Wi-Fi。')}
+  else if(failed){setWifiConnection('failed',reportedSsid);setWifiStatus('bad','Wi-Fi连接失败',reportedSsid?'无法连接 '+reportedSsid:'请检查密码和 2.4GHz 网络。')}
+  else if(connecting){setWifiConnection('connecting',reportedSsid);setWifiStatus('warn','正在连接 Wi-Fi',message||'睡眠枕正在尝试联网。')}
+  else setWifiStatus('warn','设备状态',message||'正在等待睡眠枕返回配网结果。');
+  return
+ }
+ if(eventName==='provisioning_error'){wifiStateVerifiedForCurrentBleSession=true;setWifiConnection('failed');setWifiStatus('bad','Wi-Fi配置失败',message);return}
+ if(eventName==='disconnected'){
+  connectedBleDevice=null;pendingBleDevice=null;wifiStateVerifiedForCurrentBleSession=false;
+  if(wifiStatusTimer){clearTimeout(wifiStatusTimer);wifiStatusTimer=null}
+  localStorage.removeItem('sleep-pillow-connected-device');renderBleConnection();renderBoundDevices();applyWifiConnectionState();
+  setWifiStatus('warn','设备已离线','蓝牙已断开，无法确认睡眠枕当前 Wi-Fi 状态。');
+ }
+ if(/error|unavailable|required|disconnected/.test(eventName)){byId('pairingTitle').textContent='无法连接睡眠枕';byId('pairingHint').textContent=message||'请检查蓝牙权限和设备状态';toast(message||'蓝牙连接失败')}
+}
+
+// Android App 从后台回到前台时会调用这个方法，让页面按真实时间戳刷新状态。
+function refreshFromNative(){renderSleepSessionState();syncStimTimer();renderRemoteSyncStatus()}
+
+// 给所有带 data-open 的按钮绑定“打开某页”的点击事件。
+// dataset.boundOpen 是防止同一个动态生成内容被重复绑定。
+function bindOpenButtons(root=document){root.querySelectorAll('[data-open]').forEach(b=>{if(b.dataset.boundOpen)return;b.dataset.boundOpen='1';b.addEventListener('click',()=>open(b.dataset.open))})}
+
+// 首页“超声助眠/音频助眠”快捷入口会打开助眠页，并切到助眠控制面板。
+function openSleepControl(){open('sleep');setPane('audioPane')}
+
+// 首页“查看报告”打开服务器同步的真实睡眠记录。
+function openSleepRecord(){open('sleep');setPane('recordPane');setRecordRange('day');renderSleepReports()}
+
+// 给首页快捷入口绑定事件：data-open-record 打开睡眠记录，data-open-assist 打开助眠控制。
+function bindSleepShortcuts(root=document){
+ root.querySelectorAll('[data-open-record]').forEach(b=>{if(b.dataset.boundOpenRecord)return;b.dataset.boundOpenRecord='1';b.addEventListener('click',openSleepRecord)});
+ root.querySelectorAll('[data-open-assist]').forEach(b=>{if(b.dataset.boundOpenAssist)return;b.dataset.boundOpenAssist='1';b.addEventListener('click',openSleepControl)})
+}
+// 暴露给 Android MainActivity 调用：处理系统返回键和前后台刷新。
+window.SleepPillowPrototype={canGoBack:()=>stack.length>0,back,refreshFromNative};
+
+// 显示确认弹窗。两个按钮都可配置动作，适合“仍然开始 / 去填写”这类选择。
+function showConfirm({title,body,confirmText='确认',cancelText='取消',danger=false,onConfirm,onCancel}){
+ confirmAction=onConfirm;
+ confirmCancelAction=onCancel;
+ byId('confirmTitle').textContent=title;
+ byId('confirmBody').textContent=body;
+ byId('confirmOk').textContent=confirmText;
+ byId('confirmCancel').textContent=cancelText;
+ byId('confirmDialog').classList.toggle('danger',danger);
+ byId('confirmModal').classList.add('show');
+ byId('confirmModal').setAttribute('aria-hidden','false')
+}
+
+// 关闭确认弹窗，并清空上一次保存的按钮动作。
+function closeConfirm(){
+ byId('confirmModal').classList.remove('show');
+ byId('confirmModal').setAttribute('aria-hidden','true');
+ confirmAction=null;confirmCancelAction=null
+}
+
+function runConfirmCancelAction(){const action=confirmCancelAction;closeConfirm();if(action)action()}
+
+// 登录页 Tab 切换：让对应按钮和对应表单获得 active。
+function setLoginTab(id){
+ document.querySelectorAll('[data-login-tab]').forEach(b=>b.classList.toggle('active',b.dataset.loginTab===id));
+ document.querySelectorAll('.login-pane').forEach(p=>p.classList.toggle('active',p.id===id))
+}
+
+// 登录成功后清空返回栈并进入首页。当前是原型，所以不校验账号密码。
+function loginSuccess(msg){
+ stack=[];open('home',true);toast(msg)
+}
+
+let remoteSyncReceivedAt=0,remoteSyncTimer=null;
+function formatRemoteElapsed(milliseconds){
+ const seconds=Math.max(0,Math.floor(milliseconds/1000));
+ if(seconds<60)return seconds+' 秒前';
+ const minutes=Math.floor(seconds/60);if(minutes<60)return minutes+' 分钟前';
+ return Math.floor(minutes/60)+' 小时前'
+}
+
+// 服务器统一返回 ISO-8601 时间。这里显式指定中国时区，避免手机时区不同造成显示偏差。
+function formatChinaTime(value){
+ const date=new Date(value);if(Number.isNaN(date.getTime()))return '未知时间';
+ const fields={};new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date).forEach(part=>{fields[part.type]=part.value});
+ return fields.year+'-'+fields.month+'-'+fields.day+' '+fields.hour+':'+fields.minute+':'+fields.second
+}
+
+function formatServerNumber(value,decimals=1){
+ const number=Number(value);return Number.isFinite(number)?number.toFixed(decimals):'--'
+}
+
+function formatReportDuration(seconds){
+ const total=Math.max(0,Math.round(Number(seconds)||0));
+ const hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60);
+ if(hours===0&&minutes===0)return total?'不足 1 分钟':'--';
+ return hours?hours+'小时'+String(minutes).padStart(2,'0')+'分':minutes+'分钟'
+}
+
+function sleepDurationOf(report){
+ if(!report)return 0;
+ const seconds=Number(report.sleepDurationSeconds);
+ return Number.isFinite(seconds)?seconds:Number(report.durationSeconds)||0
+}
+
+function formatReportClock(value){
+ const text=formatChinaTime(value);return text==='未知时间'?'--':text.slice(11,16)
+}
+
+function formatReportDate(value){
+ const text=formatChinaTime(value);return text==='未知时间'?'睡眠记录':text.slice(5,10)+' 睡眠记录'
+}
+
+function reportEndDescription(report){
+ if(report.endSource==='app')return '由 App 结束';
+ if(report.endSource==='data_gap')return '设备停止采集后自动结束';
+ return '已结束'
+}
+
+function setReportText(id,value){const element=byId(id);if(element)element.textContent=value}
+
+function renderReportDetail(target,report){
+ if(!target)return;
+ target.replaceChildren();
+ if(!report){
+  const empty=document.createElement('p');empty.className='muted small';empty.style.margin='0';empty.textContent='暂无已结束的睡眠记录。完成一次监测后会在这里显示真实汇总。';target.append(empty);return
+ }
+ const title=document.createElement('h3');title.textContent=formatReportDate(report.endedAt);target.append(title);
+ const summary=document.createElement('p');summary.className='muted small';summary.textContent='睡眠 '+formatReportDuration(sleepDurationOf(report))+' · '+report.recordCount+' 条采样 · '+reportEndDescription(report);target.append(summary);
+ const meta=document.createElement('div');meta.className='record-meta';
+ [['数据开始',formatChinaTime(report.firstSampleAt)],['数据结束',formatChinaTime(report.lastSampleAt)]].forEach(item=>{
+  const cell=document.createElement('div'),value=document.createElement('b'),label=document.createElement('span');
+  value.textContent=item[1];label.className='tiny muted';label.textContent=item[0];cell.append(value,label);meta.append(cell)
+ });
+ target.append(meta);
+ const button=document.createElement('button');button.className='secondary';button.style.marginTop='14px';button.dataset.open='report';button.textContent='查看完整汇总';target.append(button);bindOpenButtons(target)
+}
+
+function renderReportList(target,reports){
+ if(!target)return;
+ target.replaceChildren();
+ if(!reports||reports.length===0){
+  const empty=document.createElement('p');empty.className='muted small';empty.style.margin='0';empty.textContent='暂无已结束的睡眠记录。';target.append(empty);return
+ }
+ reports.forEach(report=>{
+  const button=document.createElement('button'),row=document.createElement('div'),icon=document.createElement('div'),body=document.createElement('div'),title=document.createElement('b'),detail=document.createElement('small'),arrow=document.createElement('span');
+  button.type='button';button.className='listbtn';row.className='row';icon.className='ico cyan';icon.textContent='◷';body.className='grow';title.textContent=formatReportDate(report.endedAt);detail.textContent='睡眠 '+formatReportDuration(sleepDurationOf(report))+' · '+report.recordCount+' 条采样';arrow.textContent='›';body.append(title,detail);row.append(icon,body,arrow);button.append(row);
+  button.addEventListener('click',()=>{renderSelectedReport(report);open('report')});target.append(button)
+ })
+}
+
+function renderDayNapList(reports,anchorValue,primaryReport){
+ const target=byId('dayNapList');if(!target)return;target.replaceChildren();
+ const targetDate=chinaDateKey(anchorValue||new Date().toISOString());
+ const naps=(reports||[]).filter(report=>chinaDateKey(report.endedAt)===targetDate&&(!primaryReport||report.id!==primaryReport.id));
+ if(naps.length===0){
+  const empty=document.createElement('p');empty.className='muted small';empty.style.margin='0';empty.textContent='暂无日间小憩记录。';target.append(empty);return
+ }
+ naps.forEach(report=>{
+  const button=document.createElement('button'),row=document.createElement('div'),icon=document.createElement('div'),body=document.createElement('div'),title=document.createElement('b'),detail=document.createElement('small'),arrow=document.createElement('span');
+  button.type='button';button.className='listbtn';row.className='row';icon.className='ico purple';icon.textContent='◷';body.className='grow';title.textContent=formatReportClock(report.firstSampleAt)+'-'+formatReportClock(report.lastSampleAt);detail.textContent='睡眠 '+formatReportDuration(sleepDurationOf(report))+' · '+report.recordCount+' 条采样';arrow.textContent='›';body.append(title,detail);row.append(icon,body,arrow);button.append(row);
+  button.addEventListener('click',()=>{renderSelectedReport(report);open('report')});target.append(button)
+ })
+}
+
+function chinaDateParts(value){
+ const date=new Date(value);if(Number.isNaN(date.getTime()))return null;
+ const parts={};new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date).forEach(part=>{parts[part.type]=part.value});
+ return {year:Number(parts.year),month:Number(parts.month),day:Number(parts.day)}
+}
+
+function chinaDateKey(value){
+ const parts=chinaDateParts(value);return parts?parts.year+'-'+String(parts.month).padStart(2,'0')+'-'+String(parts.day).padStart(2,'0'):''
+}
+
+function reportByDate(reports){
+ const mapped=new Map();
+ (reports||[]).forEach(report=>{
+  const key=chinaDateKey(report.endedAt),current=mapped.get(key);
+  // A date can contain a daytime test plus one real night. Keep the longer session in the calendar.
+  if(key&&(!current||Number(report.durationSeconds)>Number(current.durationSeconds)))mapped.set(key,report)
+ });return mapped
+}
+
+function replaceRecordDetail(id,report){
+ const target=byId(id);renderReportDetail(target,report)
+}
+
+function calendarButton(day,report,active,detailId){
+ const button=document.createElement('button'),number=document.createElement('b'),summary=document.createElement('span');
+ button.type='button';button.className='day'+(report?' good':'')+(active?' active':'');number.textContent=String(day);summary.textContent=report?formatReportDuration(sleepDurationOf(report)):'--';button.append(number,summary);
+ if(report)button.addEventListener('click',()=>{renderSelectedReport(report);replaceRecordDetail(detailId,report);document.querySelectorAll('#'+(detailId==='weekRecordDetail'?'weekCalendar':'monthCalendar')+' .day').forEach(item=>item.classList.remove('active'));button.classList.add('active')});
+ return button
+}
+
+function renderWeekCalendar(reports,anchorValue){
+ const target=byId('weekCalendar');if(!target)return;target.replaceChildren();
+ const parts=chinaDateParts(anchorValue||new Date().toISOString());if(!parts)return;
+ const anchor=new Date(Date.UTC(parts.year,parts.month-1,parts.day));const mondayOffset=(anchor.getUTCDay()+6)%7;const monday=new Date(anchor);monday.setUTCDate(anchor.getUTCDate()-mondayOffset);
+ const sunday=new Date(monday);sunday.setUTCDate(monday.getUTCDate()+6);byId('weekCalendarRange').textContent=(monday.getUTCMonth()+1)+'月'+monday.getUTCDate()+'日-'+(sunday.getUTCMonth()+1)+'月'+sunday.getUTCDate()+'日';
+ const byDate=reportByDate(reports),selected=(reports&&reports[0])||null;
+ for(let index=0;index<7;index++){
+  const date=new Date(monday);date.setUTCDate(monday.getUTCDate()+index);const key=date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0')+'-'+String(date.getUTCDate()).padStart(2,'0');const report=byDate.get(key)||null;
+  target.append(calendarButton(date.getUTCDate(),report,report===selected,'weekRecordDetail'))
+ }
+ replaceRecordDetail('weekRecordDetail',selected)
+}
+
+function renderMonthCalendar(reports,anchorValue){
+ const target=byId('monthCalendar');if(!target)return;target.replaceChildren();
+ const parts=chinaDateParts(anchorValue||new Date().toISOString());if(!parts)return;
+ const first=new Date(Date.UTC(parts.year,parts.month-1,1)),days=new Date(Date.UTC(parts.year,parts.month,0)).getUTCDate(),leading=(first.getUTCDay()+6)%7;
+ byId('monthCalendarTitle').textContent=parts.month+'月记录';
+ const byDate=reportByDate(reports),selected=(reports&&reports[0])||null;
+ for(let empty=0;empty<leading;empty++){
+  const placeholder=document.createElement('div');placeholder.className='day';placeholder.setAttribute('aria-hidden','true');target.append(placeholder)
+ }
+ for(let day=1;day<=days;day++){
+  const key=parts.year+'-'+String(parts.month).padStart(2,'0')+'-'+String(day).padStart(2,'0');const report=byDate.get(key)||null;target.append(calendarButton(day,report,report===selected,'monthRecordDetail'))
+ }
+ replaceRecordDetail('monthRecordDetail',selected)
+}
+
+function stageDisplay(stage){
+ const value=String(stage||'').toLowerCase();
+ if(value.includes('deep'))return {label:'深',name:'深睡',className:'deep'};
+ if(value.includes('rem'))return {label:'REM',name:'REM',className:'rem'};
+ if(value.includes('awake')||value.includes('wake'))return {label:'醒',name:'清醒',className:'awake'};
+ return {label:'浅',name:'浅睡',className:'light'}
+}
+
+function renderStageTimeline(timelineId,detailId,report){
+ const timeline=byId(timelineId),detail=byId(detailId);if(!timeline||!detail)return;
+ timeline.replaceChildren();const segments=report&&Array.isArray(report.stageSegments)?report.stageSegments:[];
+ if(segments.length===0){
+  const empty=document.createElement('span');empty.className='muted small';empty.textContent='该次记录暂无可用的睡眠阶段数据。';timeline.append(empty);detail.textContent='ESP32 上传阶段数据后，会在这里按实际采样时间显示。';return
+ }
+ segments.forEach(segment=>{
+  const display=stageDisplay(segment.stage),button=document.createElement('button');button.type='button';button.className='stage '+display.className;button.textContent=display.label;button.style.flex=String(Math.max(0.45,Number(segment.durationSeconds)||0));
+  const text=formatReportClock(segment.startedAt)+'-'+formatReportClock(segment.endedAt)+' '+display.name+' '+formatReportDuration(segment.durationSeconds);
+  button.addEventListener('click',()=>{detail.textContent=text});timeline.append(button)
+ });
+ const first=segments[0],firstDisplay=stageDisplay(first.stage);detail.textContent=formatReportClock(first.startedAt)+'-'+formatReportClock(first.endedAt)+' '+firstDisplay.name+' '+formatReportDuration(first.durationSeconds)
+}
+
+function renderSelectedReport(report){
+ const hasReport=Boolean(report);
+ setReportText('recordDuration',hasReport?formatReportDuration(sleepDurationOf(report)):'--');
+ setReportText('recordStart',hasReport?formatReportClock(report.firstSampleAt):'--');
+ setReportText('recordEnd',hasReport?formatReportClock(report.lastSampleAt):'--');
+ setReportText('recordSampleCount',hasReport?String(report.recordCount):'--');
+ setReportText('recordAverageHeart',hasReport?formatServerNumber(report.averageHeartRate):'--');
+ setReportText('recordAverageRespiratory',hasReport?formatServerNumber(report.averageRespiratoryRate):'--');
+ setReportText('recordAverageTemperature',hasReport?formatServerNumber(report.averageTemperature):'--');
+ setReportText('reportDuration',hasReport?formatReportDuration(sleepDurationOf(report)):'--');
+ setReportText('reportStart',hasReport?formatReportClock(report.firstSampleAt):'--');
+ setReportText('reportEnd',hasReport?formatReportClock(report.lastSampleAt):'--');
+ setReportText('reportAverageHeart',hasReport?formatServerNumber(report.averageHeartRate):'--');
+ setReportText('reportAverageRespiratory',hasReport?formatServerNumber(report.averageRespiratoryRate):'--');
+ setReportText('reportAverageTemperature',hasReport?formatServerNumber(report.averageTemperature):'--');
+ renderStageTimeline('realRecordStageTimeline','realRecordStageDetail',report);
+ renderStageTimeline('realReportStageTimeline','realReportStageDetail',report);
+ renderReportDetail(byId('recordDetail'),report);
+ const reportDataDetail=byId('reportDataDetail');
+ if(reportDataDetail){
+  reportDataDetail.replaceChildren();const text=document.createElement('p');text.className='muted small';text.style.margin='0';
+  text.textContent=hasReport?'睡眠时长按非清醒阶段累计，为 '+formatReportDuration(sleepDurationOf(report))+'。本报告基于 '+report.recordCount+' 条 ESP32 实际上传的采样数据计算，采集范围：'+formatChinaTime(report.firstSampleAt)+' 至 '+formatChinaTime(report.lastSampleAt)+'；'+reportEndDescription(report)+'。':'暂无已结束的睡眠记录。';reportDataDetail.append(text)
+ }
+}
+
+function localChinaDateKey(){
+ const parts={};new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).forEach(part=>{parts[part.type]=part.value});
+ return parts.year+'-'+parts.month+'-'+parts.day
+}
+
+function reportAnchor(data){return data&&data.anchorDate?data.anchorDate:localChinaDateKey()}
+
+function reportDateLabel(value){
+ const parts=String(value||'').split('-');return parts.length===3?Number(parts[1])+'月'+Number(parts[2])+'日':'--'
+}
+
+function shiftedReportDate(value,days){
+ const parts=String(value||localChinaDateKey()).split('-').map(Number),date=new Date(Date.UTC(parts[0],parts[1]-1,parts[2]));
+ date.setUTCDate(date.getUTCDate()+days);return date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0')+'-'+String(date.getUTCDate()).padStart(2,'0')
+}
+
+function shiftedReportMonth(value,months){
+ const parts=String(value||localChinaDateKey()).split('-').map(Number),date=new Date(Date.UTC(parts[0],parts[1]-1,1));
+ date.setUTCMonth(date.getUTCMonth()+months);return date.getUTCFullYear()+'-'+String(date.getUTCMonth()+1).padStart(2,'0')+'-01'
+}
+
+function updatePeriodNavigation(){
+ const today=localChinaDateKey(),dayAnchor=reportAnchor(reportViews.day||sleepReports),weekAnchor=reportAnchor(reportViews.week||sleepReports),monthAnchor=reportAnchor(reportViews.month||sleepReports);
+ byId('dayRecordTitle').textContent=dayAnchor===today?'昨夜睡眠':'该日睡眠';
+ byId('dayRecordDate').textContent=reportDateLabel(dayAnchor);
+ // 请求尚未完成时暂时禁用同一视图的两个箭头，避免并发请求导致日期跳回旧值。
+ document.querySelectorAll('[data-report-shift="day"]').forEach(button=>button.disabled=reportPeriodLoading.day||Number(button.dataset.reportDirection)>0&&dayAnchor>=today);
+ document.querySelectorAll('[data-report-shift="week"]').forEach(button=>button.disabled=reportPeriodLoading.week||Number(button.dataset.reportDirection)>0&&shiftedReportDate(weekAnchor,7)>today);
+ const thisMonth=today.slice(0,7);
+ document.querySelectorAll('[data-report-shift="month"]').forEach(button=>button.disabled=reportPeriodLoading.month||Number(button.dataset.reportDirection)>0&&monthAnchor.slice(0,7)>=thisMonth);
+}
+
+function renderSleepReports(){
+ // 首页只使用当前日的服务器结果，不会因为用户浏览旧周/月而改变。
+ const homeData=homeSleepReports||sleepReports,homeOvernight=homeData&&homeData.lastNight;
+ setReportText('homeReportDuration',homeOvernight?formatReportDuration(sleepDurationOf(homeOvernight)):'--');
+ setReportText('homeReportHeart',homeOvernight?formatServerNumber(homeOvernight.averageHeartRate):'--');
+ setReportText('homeReportStart',homeOvernight?formatReportClock(homeOvernight.firstSampleAt):'--');
+ setReportText('homeReportEnd',homeOvernight?formatReportClock(homeOvernight.lastSampleAt):'--');
+
+ const dayData=reportViews.day||sleepReports,weekData=reportViews.week||sleepReports,monthData=reportViews.month||sleepReports;
+ const dayOvernight=dayData&&dayData.lastNight;
+ if(activeRecordRange==='day')renderSelectedReport(dayOvernight);
+ renderDayNapList(dayData&&dayData.week,reportAnchor(dayData)+'T12:00:00+08:00',dayOvernight);
+ renderWeekCalendar(weekData&&weekData.week,reportAnchor(weekData));
+ renderMonthCalendar(monthData&&monthData.month,reportAnchor(monthData));
+ renderReportList(byId('reportWeekList'),dayData&&dayData.week);
+ updatePeriodNavigation();
+}
+
+// 服务器没有记录、未选择设备或暂时不可达时，都必须清空旧指标，避免用户误认为是当前数据。
+function clearLatestServerData(message='登录并选择智能助眠枕后，将显示服务器最近收到的记录。'){
+ byId('homeHeartRate').textContent='--';byId('homeRespiratoryRate').textContent='--';
+ byId('homeTemperature1').textContent='--';byId('homeTemperature2').textContent='--';byId('homeTemperature3').textContent='--';
+ const status=byId('realtimeDataStatus');status.className='status warn';status.textContent='等待数据';
+ byId('realtimeDetailsSummary').textContent=message;byId('realtimeSampleTime').textContent='--';byId('realtimeReceivedTime').textContent='--'
+}
+
+function renderLatestServerData(data){
+ byId('homeHeartRate').textContent=formatServerNumber(data.heartRate);
+ byId('homeRespiratoryRate').textContent=formatServerNumber(data.respiratoryRate);
+ byId('homeTemperature1').textContent=formatServerNumber(data.temperature1!==undefined?data.temperature1:data.temperature);
+ byId('homeTemperature2').textContent=formatServerNumber(data.temperature2);
+ byId('homeTemperature3').textContent=formatServerNumber(data.temperature3);
+ const receivedAt=Date.parse(data.receivedAt),sampledAt=Date.parse(data.timestamp);
+ const fresh=Number.isFinite(receivedAt)&&Date.now()-receivedAt<=60000;
+ const status=byId('realtimeDataStatus');status.className=fresh?'status':'status warn';status.textContent=fresh?'已同步':'历史数据';
+ const sampleText=Number.isFinite(sampledAt)?formatChinaTime(data.timestamp):'未知';
+ const receiveText=Number.isFinite(receivedAt)?formatChinaTime(data.receivedAt):'未知';
+ byId('realtimeDetailsSummary').textContent=fresh?'服务器正在收到智能助眠枕上传的数据。':'这是服务器最近保存的一条历史数据。';
+ byId('realtimeSampleTime').textContent=sampleText;byId('realtimeReceivedTime').textContent=receiveText
+}
+
+function openRealtimeDetails(){byId('realtimeDetailsModal').classList.add('show');byId('realtimeDetailsModal').setAttribute('aria-hidden','false')}
+function closeRealtimeDetails(){byId('realtimeDetailsModal').classList.remove('show');byId('realtimeDetailsModal').setAttribute('aria-hidden','true')}
+
+const infoDetails={
+ stim:{title:'超声助眠详情',summary:'当前为固定刺激模式，App 负责记录和提醒，不直接控制硬件开关。',items:[['启动方式','实体开关'],['单次时长','30 分钟'],['App 作用','记录开启时间并提醒结束'],['当前限制','暂不支持 App 内调节模式或强度']]},
+ wifi:{title:'Wi-Fi 联网说明',summary:'Wi-Fi 用于让智能助眠枕独立联网，手机不需要持续保持蓝牙连接。',items:[['配网方式','手机通过蓝牙发送 Wi-Fi 名称和密码'],['联网用途','校时、历史数据上传、固件升级'],['日常近距离控制','仍通过蓝牙完成'],['网络要求','请使用 2.4 GHz Wi-Fi']]}
+};
+function openInfoDetails(type){
+ const detail=infoDetails[type];if(!detail)return;
+ byId('infoDetailsTitle').textContent=detail.title;byId('infoDetailsSummary').textContent=detail.summary;
+ const list=byId('infoDetailsList');list.replaceChildren();detail.items.forEach(item=>{const row=document.createElement('div'),label=document.createElement('span'),value=document.createElement('b');label.textContent=item[0];value.textContent=item[1];row.append(label,value);list.append(row)});
+ byId('infoDetailsModal').classList.add('show');byId('infoDetailsModal').setAttribute('aria-hidden','false')
+}
+function closeInfoDetails(){byId('infoDetailsModal').classList.remove('show');byId('infoDetailsModal').setAttribute('aria-hidden','true')}
+
+// 此状态依据“服务器最后收到 ESP32 上传”的时间判断，独立于手机蓝牙是否已连接。
+function renderRemoteSyncStatus(){
+ const label=byId('remoteSyncLabel'),detail=byId('remoteSyncDetail');if(!label||!detail)return;
+ if(!remoteSyncReceivedAt){label.textContent='待确认 ›';label.className='state-text warn';detail.textContent='登录并选择设备后检查服务器数据';return}
+ const elapsed=Date.now()-remoteSyncReceivedAt;
+ if(elapsed<=60000){label.textContent='同步正常 ›';label.className='state-text good';detail.textContent='服务器 '+formatRemoteElapsed(elapsed)+' 收到智能助眠枕数据';return}
+ label.textContent='未收到最新数据 ›';label.className='state-text bad';detail.textContent='服务器已 '+formatRemoteElapsed(elapsed)+' 未收到上传；设备可能断网、断电或停止采集。'
+}
+function startRemoteSyncTicker(){if(remoteSyncTimer)return;remoteSyncTimer=setInterval(renderRemoteSyncStatus,10000)}
+
+// 此状态来自服务器已收到的 ESP32 连续遥测，不依赖手机是否仍在蓝牙范围内。
+function applyDeviceRecordingState(data){
+ const startedAt=Date.parse(data&&data.startedAt||'');
+ deviceRecordingActive=Boolean(data&&data.isRecording&&Number.isFinite(startedAt));
+ deviceRecordingStartedAt=deviceRecordingActive?startedAt:0;
+ const lastSampleAt=Date.parse(data&&data.lastSampleAt||'');
+ deviceRecordingLastSampleAt=Number.isFinite(lastSampleAt)?lastSampleAt:0;
+ startSleepTicker();renderSleepSessionState()
+}
+
+// 服务器请求由 Android 原生层完成，令牌不会传回 HTML；这里只更新界面。
+function onServerEvent(eventName,payloadJson){
+ let data={};try{data=JSON.parse(payloadJson||'{}')}catch(error){}
+ if(eventName==='server_login_success'){
+  byId('loginPassword').value='';
+  localStorage.setItem('sleep-pillow-account-name',data.username||'');
+  loginSuccess('登录成功');
+  return
+ }
+ if(eventName==='server_questionnaire_status'){
+  serverQuestionnaireStatus={};
+  (Array.isArray(data.items)?data.items:[]).forEach(item=>{if(item&&item.questionnaireType)serverQuestionnaireStatus[item.questionnaireType]=item});
+  updateSurveyBadges();
+  return
+ }
+ if(eventName==='server_questionnaire_submitted'){
+  pendingQuestionnaireSubmission=null;
+  if(data.questionnaireType)serverQuestionnaireStatus[data.questionnaireType]=data;
+  updateSurveyBadges();
+  byId('questionnaireSubmitStatus').textContent='已提交并同步到管理员后台。';
+  byId('questionnaireSubmit').disabled=false;
+  toast('问卷已提交');
+  setTimeout(()=>open('questionnaires',true),500);
+  return
+ }
+ if(eventName==='server_questionnaire_error'){
+  pendingQuestionnaireSubmission=null;
+  byId('questionnaireSubmit').disabled=false;
+  byId('questionnaireSubmitStatus').textContent=data.message||'提交失败，请检查网络后重试。';
+  toast(data.message||'问卷提交失败');
+  return
+ }
+ if(eventName==='server_questionnaire_attachment_uploaded'){
+  const pending=pendingQuestionnaireSubmission;
+  if(!pending)return;
+  if(!data.id||data.attachmentKey!==pending.attachmentKey){
+   pendingQuestionnaireSubmission=null;
+   byId('questionnaireSubmit').disabled=false;
+   byId('questionnaireSubmitStatus').textContent='图片上传结果无效，请重新选择后再试。';
+   return
+  }
+  pending.answers[pending.attachmentQuestionId]={question:pending.attachmentQuestionLabel,value:'已上传图片',attachmentId:data.id,contentType:data.contentType||'',size:data.size||0};
+  byId('questionnaireSubmitStatus').textContent='图片上传成功，正在提交问卷…';
+  notifyNative('server_questionnaire_submit',{questionnaireType:pending.questionnaireType,responseDate:pending.responseDate,answers:pending.answers});
+  return
+ }
+ if(eventName==='server_questionnaire_attachment_error'){
+  pendingQuestionnaireSubmission=null;
+  byId('questionnaireSubmit').disabled=false;
+  byId('questionnaireSubmitStatus').textContent=data.message||'图片上传失败，请检查网络后重试。';
+  toast(data.message||'图片上传失败');
+  return
+ }
+ if(eventName==='server_current_device'){
+  toast('已恢复当前设备：'+(data.displayName||data.deviceId||''));
+  return
+ }
+ if(eventName==='server_device_selected'){
+  toast('当前设备已同步到账号：'+(data.displayName||data.deviceId||''));
+  return
+ }
+ if(eventName==='server_sleep_reports'){
+  const received={latest:data.latest||null,lastNight:data.lastNight||null,week:Array.isArray(data.week)?data.week:[],month:Array.isArray(data.month)?data.month:[],generatedAt:data.generatedAt||null,anchorDate:data.anchorDate||localChinaDateKey()};
+  applyDeviceRecordingState(data.activeSession?{isRecording:true,startedAt:data.activeSession.startedAt,lastSampleAt:data.activeSession.lastSampleAt}:{isRecording:false});
+  const viewMode=data.viewMode||'home';
+  if(viewMode==='day'){reportViews.day=received;reportPeriodLoading.day=false}
+  else if(viewMode==='week'){reportViews.week=received;reportPeriodLoading.week=false}
+  else if(viewMode==='month'){reportViews.month=received;reportPeriodLoading.month=false}
+  else{
+   sleepReports=received;homeSleepReports=received;
+   reportViews={day:received,week:received,month:received};
+  }
+  renderSleepReports();
+  return
+ }
+ if(eventName==='server_sleep_reports_error'){
+  const viewMode=['day','week','month'].includes(data.viewMode)?data.viewMode:activeRecordRange;
+  reportPeriodLoading[viewMode]=false;
+  updatePeriodNavigation();
+  toast(data.message||'历史睡眠记录加载失败，请检查网络后重试。');
+  return
+ }
+ if(eventName==='server_sleep_marker_recorded'){
+  toast(data.markerType==='prepare'?'已保存准备入睡时间':'已保存醒来时间');
+  return
+ }
+ if(eventName==='server_sleep_marker_error'){
+  toast(data.message||'时间标记暂未同步；设备记录不受影响。');
+  return
+ }
+ if(eventName==='server_device_recording'){
+  applyDeviceRecordingState(data);
+  return
+ }
+ if(eventName==='server_device_recording_error'){
+  // 网络短暂失败时保留上次已确认的设备记录状态，避免页面闪回未记录。
+  return
+ }
+ if(eventName==='server_telemetry_latest'){
+  renderLatestServerData(data);
+  remoteSyncReceivedAt=Date.parse(data.receivedAt)||0;renderRemoteSyncStatus();startRemoteSyncTicker();
+  return
+ }
+ if(eventName==='server_telemetry_missing'||eventName==='server_no_current_device'){
+  if(eventName==='server_no_current_device')applyDeviceRecordingState({isRecording:false});
+  remoteSyncReceivedAt=0;renderRemoteSyncStatus();clearLatestServerData(data.message||'服务器尚未收到当前智能助眠枕的数据。');
+  return
+ }
+ if(eventName==='server_remote_sync_error'){
+  const detail=byId('remoteSyncDetail');const label=byId('remoteSyncLabel');
+  if(detail&&label){label.textContent='服务器不可达 ›';label.className='state-text warn';detail.textContent=data.message||'无法查询服务器最新上传时间';}
+  clearLatestServerData(data.message||'暂时无法查询服务器最新数据。');
+  return
+ }
+ if(eventName==='server_error'){
+  const text=data.message||'服务器请求失败，请稍后重试。';
+  const hint=byId('loginHint');
+  if(current==='login'&&hint)hint.textContent=text;
+  else toast(text);
+  const submit=byId('loginSubmit');if(submit)submit.disabled=false;
+ }
+}
+
+// 原生层返回本地通知权限、精确定时权限和下次计划时间，便于无需等待就定位提醒问题。
+function onNativeEvent(eventName,payloadJson){
+ let data={};try{data=JSON.parse(payloadJson||'{}')}catch(error){}
+ if(eventName==='questionnaire_reminder_status'){
+  const text='通知：'+(data.notificationsAllowed?'已允许':'未允许')+'；定时：'+(data.exactAlarmsAllowed?'精确':'可能延迟')+'；后台：'+(data.backgroundReminderAllowed?'已解除限制':'可能受限')+'；睡前：'+(data.bedReminder||'--')+'；晨起：'+(data.morningReminder||'--');
+  const completion='；睡前（'+(data.bedQuestionnaireDate||todayKey())+'）'+(data.bedCompletedToday?'已填写':'未填写')+'、醒后（'+(data.morningQuestionnaireDate||yesterdayKey())+'）'+(data.morningCompletedLastNight?'已填写':'未填写');
+  byId('reminderStatus').textContent=text+completion+'；下次睡前：'+(data.nextBed||'--')+'；下次晨起：'+(data.nextMorning||'--')+'；上次触发：'+(data.lastDelivery||'尚未触发')+'；定时测试：'+(data.scheduledTest||'--');
+  return
+ }
+ if(eventName==='questionnaire_reminder_test_sent'){
+  toast(data.sent?'已发送测试系统通知，请查看手机通知栏':'通知权限未允许，请先在系统弹窗中允许通知，再点一次测试');
+ }
+ if(eventName==='questionnaire_reminder_delayed_test_scheduled')toast('已安排 '+(data.scheduledFor||'2分钟后')+' 的定时测试通知');
+}
+
+// 把秒数格式化成 00:00:00，用于睡眠运行时长。
+function formatElapsed(seconds){
+ const h=Math.floor(seconds/3600).toString().padStart(2,'0');
+ const m=Math.floor(seconds%3600/60).toString().padStart(2,'0');
+ const s=(seconds%60).toString().padStart(2,'0');
+ return h+':'+m+':'+s
+}
+
+// 把秒数格式化成 30:00，用于超声助眠倒计时。
+function formatStimTime(seconds){
+ const m=Math.floor(seconds/60).toString().padStart(2,'0');
+ const s=(seconds%60).toString().padStart(2,'0');
+ return m+':'+s
+}
+
+// 根据超声助眠状态刷新按钮、倒计时、进度条和实时监测页文字。
+function renderStimStatus(state='idle'){
+ stimState=state;
+ const active=state==='running', done=state==='done', stopped=state==='stopped';
+ byId('stimStatus').className='status'+(done||stopped?' done':active?'':' warn');
+ byId('stimStatus').textContent=active?'刺激中':done?'本次已结束':stopped?'本次已停止':'待开启';
+ byId('stimTimer').textContent=formatStimTime(stimRemaining);
+ byId('stimProgress').style.width=((1800-stimRemaining)/18)+'%';
+ byId('stimHint').textContent=active?'硬件固定模式运行中，App 暂不调节模式或强度。':done?'本次 30 分钟刺激已结束，请关闭硬件开关；需要再次使用时可开始下一次计时。':stopped?'睡眠记录已结束，本次助眠计时已同步停止。':'打开硬件开关后，可在 App 中记录开始时间并提醒结束。';
+ byId('hardwareStimStart').textContent=active?'重新开始计时':done||stopped?'开始下一次计时':'我已打开硬件开关';
+ byId('hardwareStimReset').textContent=done||stopped?'恢复初始状态':'重新计时';
+ if(byId('sessionStimState')){
+  byId('sessionStimState').className='state-text '+(active?'good':done||stopped?'warn':'warn');
+  byId('sessionStimState').textContent=active?'运行中':done?'已结束':stopped?'已停止':'待开启'
+ }
+ if(byId('sessionStimText'))byId('sessionStimText').textContent=active?'固定刺激剩余 '+formatStimTime(stimRemaining):done?'30分钟刺激已完成':stopped?'固定刺激计时已停止':'由实体开关启动后，在 App 中记录 30 分钟'
+}
+
+// 用保存的结束时间 stimEndAt 计算剩余秒数。
+// 这样即使 App 切到后台，回来后倒计时也会按真实时间继续。
+function syncStimTimer(){
+ if(stimState==='running'){
+  stimRemaining=Math.max(0,Math.ceil((stimEndAt-Date.now())/1000));
+  if(stimRemaining===0){
+   clearInterval(stimInterval);stimInterval=null;stimEndAt=0;
+   localStorage.setItem('sleep-pillow-stim-state','done');
+   localStorage.removeItem('sleep-pillow-stim-end');
+   renderStimStatus('done');
+   notifyNative('stim_timer_finished',{endedAt:Date.now()});
+   return
+  }
+ }
+ renderStimStatus(stimState)
+}
+
+// 开始每秒刷新一次超声助眠倒计时。
+function startStimTicker(){
+ clearInterval(stimInterval);stimInterval=null;
+ syncStimTimer();
+ if(stimState==='running')stimInterval=setInterval(syncStimTimer,1000)
+}
+
+// 重置超声助眠计时，恢复到 30:00。
+function resetStimTimer(silent=false){
+ const wasDone=stimState==='done'||stimState==='stopped';
+ clearInterval(stimInterval);stimInterval=null;stimRemaining=1800;stimEndAt=0;
+ localStorage.removeItem('sleep-pillow-stim-state');
+ localStorage.removeItem('sleep-pillow-stim-end');
+ renderStimStatus('idle');
+ if(!silent)toast(wasDone?'已恢复初始状态':'已重置为 30 分钟')
+}
+
+// 开始超声助眠 30 分钟计时。
+// options.auto=true 仅保留旧版事件兼容含义；当前准备入睡按钮不会自动启动硬件计时。
+function startStimTimer(options={}){
+ if(deviceState==='unbound'){toast('请先绑定睡眠枕');open('pairing');return}
+ const startedAt=Date.now();
+ stimRemaining=1800;stimEndAt=startedAt+1800*1000;
+ localStorage.setItem('sleep-pillow-stim-state','running');
+ localStorage.setItem('sleep-pillow-stim-end',String(stimEndAt));
+ renderStimStatus('running');startStimTicker();
+ notifyNative('stim_timer_started',{startedAt,endAt:stimEndAt,auto:!!options.auto});
+ if(!options.auto)toast('已记录硬件开关开启，开始30分钟计时')
+}
+
+// 页面加载时恢复超声助眠状态：如果之前还在运行，就继续每秒刷新。
+function restoreStimTimer(){
+ if(stimState==='running'&&stimEndAt)startStimTicker();
+ else{
+  stimRemaining=stimState==='done'||stimState==='stopped'?0:1800;
+  renderStimStatus(stimState==='done'||stimState==='stopped'?stimState:'idle')
+ }
+}
+
+// 结束睡眠时同步停止超声助眠倒计时，避免用户已经结束睡眠但助眠栏还在倒计时。
+function stopStimTimerForSleepEnd(){
+ if(stimState!=='running')return;
+ const stoppedAt=Date.now();
+ clearInterval(stimInterval);stimInterval=null;stimRemaining=0;stimEndAt=0;
+ localStorage.setItem('sleep-pillow-stim-state','stopped');
+ localStorage.removeItem('sleep-pillow-stim-end');
+ renderStimStatus('stopped');
+ notifyNative('stim_timer_stopped',{stoppedAt,reason:'sleep_session_ended'})
+}
+
+// 用户“准备入睡”与 ESP32 的设备记录是两条独立状态。设备是否记录以服务器收到的
+// 连续遥测为准，避免手机按钮在设备已上电时错误地截断或重置数据会话。
+function renderSleepSessionState(){
+ const prepared=sleepSessionActive&&sleepStartedAt;
+ const recording=deviceRecordingActive&&deviceRecordingStartedAt;
+ const elapsed=recording?Math.max(0,Math.floor((Date.now()-deviceRecordingStartedAt)/1000)):0;
+ byId('startSleep').textContent=prepared?'查看准备状态':'准备入睡';
+ byId('homeEndSleep').hidden=!prepared;
+ byId('homeGuideButton').hidden=!!prepared;
+ if(recording){
+  byId('homeDeviceStatus').className='status';
+  byId('homeDeviceStatus').textContent='设备记录中';
+  byId('homeStatusTitle').textContent='智能助眠枕正在记录';
+  byId('homeStatusDesc').textContent=prepared?'已标记准备入睡；设备记录会持续到断电或停止上传。':'设备已上电采集；准备入睡后可填写睡前问卷，不会影响已开始的设备记录。';
+  byId('sessionTitle').textContent='设备实时监测';
+  byId('sessionStatusBadge').textContent='记录中';
+  byId('sessionStageLabel').textContent='设备当前监测状态';
+  byId('sessionStage').textContent='采集中';
+  byId('sessionElapsedLabel').innerHTML='设备记录时长 <span id="sessionElapsed">'+formatElapsed(elapsed)+'</span>';
+  byId('sessionElapsed').textContent=formatElapsed(elapsed)
+ }else if(prepared){
+  byId('homeDeviceStatus').className='status warn';
+  byId('homeDeviceStatus').textContent='等待设备数据';
+  byId('homeStatusTitle').textContent='已标记准备入睡';
+  byId('homeStatusDesc').textContent='等待智能助眠枕上电并上传第一条数据；设备开始工作后会自动建立记录。';
+  byId('sessionTitle').textContent='准备入睡';
+  byId('sessionStatusBadge').textContent='等待设备';
+  byId('sessionStageLabel').textContent='设备记录状态';
+  byId('sessionStage').textContent='等待数据';
+  byId('sessionElapsedLabel').innerHTML='设备记录时长 <span id="sessionElapsed">00:00:00</span>';
+ }else{
+  // 未准备入睡且没有活动设备记录时才显示默认状态；有设备记录的状态由上方分支覆盖。
+  if(byId('sessionElapsed'))byId('sessionElapsed').textContent='00:00:00';
+  byId('sessionTitle').textContent='设备实时监测';
+  byId('sessionStatusBadge').textContent='等待设备';
+  byId('sessionStageLabel').textContent='设备记录状态';
+  byId('sessionStage').textContent='等待数据';
+  byId('sessionElapsedLabel').innerHTML='设备记录时长 <span id="sessionElapsed">00:00:00</span>';
+ }
+}
+
+// 开始每秒刷新一次睡眠记录运行时长。
+function startSleepTicker(){
+ clearInterval(sleepInterval);sleepInterval=null;
+ renderSleepSessionState();
+ if((sleepSessionActive&&sleepStartedAt)||(deviceRecordingActive&&deviceRecordingStartedAt))sleepInterval=setInterval(renderSleepSessionState,1000)
+}
+
+// “准备入睡”只保存主观时间、触发问卷流程并进入监测页。ESP32 上电后的遥测负责
+// 自动创建实际设备记录，超声是否运行也由硬件实体开关决定。
+function startSleepSession(){
+ sleepSessionActive=true;sleepStartedAt=Date.now();
+ localStorage.setItem('sleep-pillow-session-active','1');
+ localStorage.setItem('sleep-pillow-session-start',String(sleepStartedAt));
+ notifyNative('sleep_session_started',{startedAt:sleepStartedAt});
+ startSleepTicker();open('session');
+ toast(deviceRecordingActive?'已标记准备入睡；设备记录持续到断电。':'已标记准备入睡；设备上电上传后会自动开始记录。')
+}
+
+// 结束按钮仅结束主观准备入睡状态，不能停止仍然上电采集的 ESP32。
+function confirmEndSleep(){
+ showConfirm({
+  title:'结束准备入睡？',
+  body:'这会记录你的醒来时间并提示填写醒后问卷。智能助眠枕若仍在上电采集，会继续记录，直到断电或停止上传。',
+  confirmText:'结束并记录时间',
+  danger:true,
+  onConfirm:endSleepSession
+ })
+}
+
+// 本次记录结束后，若当天尚未完成醒后问卷，马上给出填写入口；稍后填写不会影响已保存的数据。
+function showWakeQuestionnairePrompt(){
+ if(isSurveyDone('daily-two'))return;
+ showConfirm({
+  title:'完成醒后问卷？',
+  body:'已记录你的醒来时间。填写醒后问卷可记录晨起精神状态和夜间体验；设备数据会在断电或停止上传后自动完成。',
+  confirmText:'去填写',
+  cancelText:'稍后填写',
+  onConfirm:()=>openQuestionnaireForm('post_wake')
+ })
+}
+
+// 结束主观标记：通知 Android、清理本地状态并提示醒后问卷；不停止设备记录或超声计时。
+function endSleepSession(){
+ const endedAt=Date.now();
+ notifyNative('sleep_session_ended',{startedAt:sleepStartedAt,endedAt});
+ sleepSessionActive=false;sleepStartedAt=0;
+ clearInterval(sleepInterval);sleepInterval=null;
+ localStorage.removeItem('sleep-pillow-session-active');
+ localStorage.removeItem('sleep-pillow-session-start');
+ setDeviceState(deviceState);
+ toast('已记录醒来时间；设备数据会在断电或停止上传后自动形成报告。');
+ // 结束后进入报告页时不再把“实时监测页”压进返回栈，返回报告应回到首页。
+ setTimeout(()=>{open('report',true);showWakeQuestionnairePrompt()},500)
+}
+
+// 切换设备演示状态。第一版没有真实硬件数据，所以用这里模拟：
+// normal、lowBattery、wifiFail、weakSignal、unbound。
+function setDeviceState(type){
+ if(!['lowBattery','wifiFail','weakSignal','normal','unbound'].includes(type))type='lowBattery';
+ deviceState=type;
+ localStorage.setItem('sleep-pillow-device-state',type);
+ document.querySelectorAll('[data-device-state]').forEach(b=>b.classList.toggle('active',b.dataset.deviceState===type));
+ const alert=byId('deviceAlert'), title=byId('deviceAlertTitle'), text=byId('deviceAlertText'), main=byId('deviceMainStatus');
+ const wifi=byId('wifiStateLabel'), sensor=byId('sensorStatus'), sensorText=byId('sensorText');
+ const batteryPill=byId('deviceBatteryPill'), signalPill=byId('deviceSignalPill');
+ const homeStatus=byId('homeDeviceStatus'), homeTitle=byId('homeStatusTitle'), homeDesc=byId('homeStatusDesc');
+ const homeBattery=byId('homeBatteryCheck'), homeWifi=byId('homeWifiCheck'), homeSignal=byId('homeSignalCheck');
+ const batteryAlert=byId('homeBatteryAlert'), wifiAlert=byId('homeWifiAlert'), signalAlert=byId('homeSignalAlert');
+ const setCheck=(el,state,label,desc)=>{el.className='check'+(state?' '+state:'');el.innerHTML='<b>'+label+'</b>'+desc};
+ const setHomeAlerts=(battery,wifiFail,signal)=>{batteryAlert.hidden=!battery;wifiAlert.hidden=!wifiFail;signalAlert.hidden=!signal};
+ alert.className='alert warn';main.className='status warn';sensor.className='status warn';homeStatus.className='status warn';
+ if(type==='normal'){
+  alert.className='alert';title.textContent='设备正常';text.textContent='设备状态正常，今晚可以开始记录。';main.className='status';main.textContent='已连接';
+  batteryPill.textContent='电量 86%';signalPill.textContent='信号 92%';sensor.className='status';sensor.textContent='良好';sensorText.textContent='接触良好，可以稳定采集';
+  homeStatus.className='status';homeStatus.textContent='睡眠枕已连接';homeTitle.textContent='设备状态正常';homeDesc.textContent='蓝牙、Wi‑Fi和传感器状态良好，今晚可以直接开始记录。';
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量 86%','今晚记录充足');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'','信号良好','采集稳定');
+  setHomeAlerts(false,false,false);
+ }else if(type==='wifiFail'){
+  alert.className='alert bad';title.textContent='Wi‑Fi连接失败';text.textContent='Wi‑Fi 连接失败，本地数据会先保存在设备中。';main.className='status bad';main.textContent='需处理';
+  batteryPill.textContent='电量 63%';signalPill.textContent='信号 86%';wifi.textContent='连接失败 ›';wifi.className='state-text bad';sensor.className='status';sensor.textContent='良好';sensorText.textContent='接触良好，可以稳定采集';
+  homeStatus.className='status bad';homeStatus.textContent='Wi‑Fi 需处理';homeTitle.textContent='Wi‑Fi 连接失败';homeDesc.textContent='睡眠枕仍可本地记录数据，联网恢复后会自动补传。';
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量 63%','可继续监测');setCheck(homeWifi,'bad','Wi‑Fi 失败','等待重新连接');setCheck(homeSignal,'','信号良好','采集稳定');
+  setHomeAlerts(false,true,false);
+ }else if(type==='weakSignal'){
+  title.textContent='信号偏弱';text.textContent='传感器信号偏弱，请调整枕头位置或躺姿。';main.textContent='信号一般';
+  batteryPill.textContent='电量 64%';signalPill.textContent='信号 48%';sensor.textContent='偏弱';sensorText.textContent='建议靠近颈肩区域，避免枕套过厚';
+  homeStatus.className='status warn';homeStatus.textContent='信号偏弱';homeTitle.textContent='传感器信号偏弱';homeDesc.textContent='建议调整睡眠枕位置，保证传感器区域靠近颈肩。';
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量 64%','可继续监测');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'warn','信号 48%','建议重新校准');
+  setHomeAlerts(false,false,true);
+ }else if(type==='unbound'){
+  alert.className='alert bad';title.textContent='设备未绑定';text.textContent='当前账号未绑定睡眠枕，需要重新添加设备后才能开始记录。';main.className='status bad';main.textContent='未绑定';
+  batteryPill.textContent='电量 --';signalPill.textContent='信号 --';wifi.textContent='未配置 ›';wifi.className='state-text bad';sensor.className='status bad';sensor.textContent='未连接';sensorText.textContent='绑定设备后才能检测传感器状态';
+  homeStatus.className='status bad';homeStatus.textContent='设备未绑定';homeTitle.textContent='未绑定睡眠枕';homeDesc.textContent='请先添加并校准睡眠枕，然后再开始睡眠记录。';
+  setCheck(byId('homeBluetoothCheck'),'bad','蓝牙未连','需要重新绑定');setCheck(homeBattery,'bad','电量 --','暂无设备数据');setCheck(homeWifi,'bad','Wi‑Fi 未配置','绑定后设置');setCheck(homeSignal,'bad','信号 --','暂无采集数据');
+  setHomeAlerts(false,false,false);
+ }else{
+  title.textContent='电量不足';text.textContent='电量低于 20%，建议先充电，避免整晚记录中断。';main.textContent='电量偏低';
+  batteryPill.textContent='电量 18%';signalPill.textContent='信号 86%';sensor.className='status';sensor.textContent='良好';sensorText.textContent='接触良好，可以稳定采集';
+  homeStatus.className='status warn';homeStatus.textContent='电量偏低';homeTitle.textContent='设备电量偏低';homeDesc.textContent='建议先给睡眠枕充电，避免整晚记录过程中断。';
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'warn','电量 18%','建议先充电');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'','信号良好','采集稳定');
+  setHomeAlerts(true,false,false);
+ }
+ applyWifiConnectionState();
+ renderSleepSessionState()
+}
+
+// 初始化通用按钮绑定。
+bindOpenButtons();
+bindSleepShortcuts();
+document.querySelectorAll('[data-back]').forEach(b=>b.addEventListener('click',back));
+document.querySelectorAll('[data-toast]').forEach(b=>b.addEventListener('click',()=>toast(b.dataset.toast)));
+navBtns.forEach(b=>b.addEventListener('click',()=>open(b.dataset.view)));
+
+// 登录相关事件绑定。
+document.querySelectorAll('[data-login-tab]').forEach(b=>b.addEventListener('click',()=>setLoginTab(b.dataset.loginTab)));
+byId('loginForm').addEventListener('submit',e=>{
+ e.preventDefault();
+ const username=byId('loginUsername').value.trim(),password=byId('loginPassword').value;
+ if(!username||!password){byId('loginHint').textContent='请输入账号和密码。';return}
+ byId('loginHint').textContent='正在验证账号…';byId('loginSubmit').disabled=true;
+ notifyNative('server_login',{username,password});
+});
+byId('smsForm').addEventListener('submit',e=>{e.preventDefault();toast('当前开发版仅支持账号密码登录')});
+byId('sendCode').addEventListener('click',()=>toast('当前开发版暂未开通短信验证码登录'));
+
+// 先检查是否完成睡前问卷；用户也可以明确选择跳过，避免问卷遗漏阻断真实监测。
+function showStartSleepConfirmation(){
+ const needsDevice=deviceState==='unbound';
+ showConfirm({
+  title:'准备入睡？',
+  body:deviceState==='lowBattery'?'准备入睡后设备仍会按上电状态记录。当前电量偏低，建议充电后再开始。':deviceState==='wifiFail'?'设备会先把数据保存在睡眠枕本地，Wi-Fi恢复后再同步。':deviceState==='weakSignal'?'当前传感器信号偏弱，建议重新调整枕头位置后再继续。':needsDevice?'当前未绑定睡眠枕，请先添加设备后再准备入睡。':'将记录你的准备入睡时间并检查睡前问卷；设备记录由 ESP32 上电后的数据自动开始。',
+  confirmText:needsDevice?'去添加设备':'确认准备入睡',
+  onConfirm:()=>needsDevice?open('pairing'):startSleepSession()
+ })
+}
+function requestSleepStart(){
+ if(sleepSessionActive){open('session');renderSleepSessionState();return}
+ if(deviceState==='unbound'){showStartSleepConfirmation();return}
+ if(isSurveyDone('daily-one')){showStartSleepConfirmation();return}
+ showConfirm({
+  title:'完成睡前问卷？',
+  body:'今日睡前问卷尚未填写。填写后可记录睡前状态；也可以先开始本次睡眠记录。',
+  confirmText:'去填写',
+  cancelText:'仍然开始',
+  onConfirm:()=>openQuestionnaireForm('pre_sleep'),
+  onCancel:showStartSleepConfirmation
+ })
+}
+
+// 首页“准备入睡”按钮：如果已经标记准备入睡，就回到状态页；否则先检查睡前问卷。
+byId('startSleep').addEventListener('click',requestSleepStart);
+
+// 睡眠结束、设备绑定、引导、校准、Wi-Fi 配网等主要操作绑定。
+byId('endSleep').addEventListener('click',confirmEndSleep);
+byId('homeEndSleep').addEventListener('click',confirmEndSleep);
+byId('manualConnectForm').addEventListener('submit',e=>{
+ e.preventDefault();
+ const address=byId('manualDeviceAddress').value.trim().toUpperCase();
+ const name=byId('manualDeviceName').value.trim()||'睡眠枕';
+ if(!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(address)){toast('请输入正确的 MAC 地址');return}
+ connectDevice({name,address})
+});
+byId('finishGuide').addEventListener('click',()=>open('wifi'));
+byId('calibrationTest').addEventListener('click',()=>{
+ byId('signalBars').classList.add('good');
+ byId('calibrateText').textContent='摆放位置合适，可以进行整晚监测。';
+ setDeviceState('normal');toast('校准通过')
+});
+byId('wifiForm').addEventListener('submit',e=>{
+ e.preventDefault();
+ if(!connectedBleDevice){renderWifiBleStatus();toast('请先连接睡眠枕蓝牙');return}
+ const ssid=byId('wifiSsid').value.trim(),password=byId('wifiPassword').value;
+ setWifiConnection('connecting',ssid);
+ setWifiStatus('warn','正在配置','正在通过蓝牙发送 Wi-Fi 信息。');
+ notifyNative('ble_provision_wifi',{ssid,password})
+});
+
+// 需要二次确认的设备操作：固件升级、解除绑定。
+document.querySelectorAll('[data-confirm]').forEach(b=>b.addEventListener('click',()=>{
+ if(b.dataset.confirm==='firmware')showConfirm({
+  title:'确认升级固件？',
+  body:'升级前请保持电量高于 50%，并确保 Wi‑Fi 稳定。升级过程中不要断电或解除绑定。',
+  confirmText:'开始检查',
+  onConfirm:()=>{toast('正在检查电量与网络');setTimeout(()=>toast('演示：电量偏低，暂不升级'),700)}
+ });
+ if(b.dataset.confirm==='unbind')showConfirm({
+ title:'解除当前设备绑定？',
+ body:'解除后将无法继续接收这台睡眠枕的数据，需要重新绑定才能使用。',
+ confirmText:'解除绑定',
+ danger:true,
+  onConfirm:()=>{setDeviceState('unbound');toast('演示：已解除当前设备绑定')}
+ })
+}));
+
+// 设置页底部“演示/调试”按钮，用来模拟不同设备状态。
+document.querySelectorAll('[data-device-state]').forEach(b=>b.addEventListener('click',()=>{setDeviceState(b.dataset.deviceState);toast('已切换状态演示')}));
+
+// 超声助眠计时和通用确认弹窗事件。
+byId('hardwareStimStart').addEventListener('click',startStimTimer);
+byId('hardwareStimReset').addEventListener('click',()=>resetStimTimer());
+byId('confirmCancel').addEventListener('click',runConfirmCancelAction);
+byId('confirmModal').addEventListener('click',e=>{if(e.target.id==='confirmModal')closeConfirm()});
+byId('confirmOk').addEventListener('click',()=>{const action=confirmAction;closeConfirm();if(action)action()});
+byId('realtimeDetailsButton').addEventListener('click',openRealtimeDetails);
+byId('realtimeDetailsClose').addEventListener('click',closeRealtimeDetails);
+byId('realtimeDetailsModal').addEventListener('click',e=>{if(e.target.id==='realtimeDetailsModal')closeRealtimeDetails()});
+document.querySelectorAll('[data-info-details]').forEach(button=>button.addEventListener('click',()=>openInfoDetails(button.dataset.infoDetails)));
+byId('infoDetailsClose').addEventListener('click',closeInfoDetails);
+byId('infoDetailsModal').addEventListener('click',e=>{if(e.target.id==='infoDetailsModal')closeInfoDetails()});
+
+// 切换同一页面内部的小面板，例如助眠页里的“助眠控制 / 睡眠记录”。
+function setPane(id){
+ const button=document.querySelector('.tabs button[data-tab="'+id+'"]');
+ if(button){const group=button.parentElement;group.querySelectorAll('button').forEach(x=>x.classList.remove('active'));button.classList.add('active')}
+ document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.id===id))
+}
+
+// 助眠页音频相关事件：选择曲目、播放按钮、定时关闭、渐弱停止、循环播放。
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.tab)setPane(b.dataset.tab)}));
+document.querySelectorAll('.soundChoice').forEach(b=>b.addEventListener('click',()=>{byId('trackName').textContent=b.dataset.name;byId('trackMeta').textContent=b.dataset.meta;toast('已选择 '+b.dataset.name)}));
+byId('playBtn').addEventListener('click',e=>{e.currentTarget.textContent=e.currentTarget.textContent==='▶'?'Ⅱ':'▶'});
+byId('audioTimer').addEventListener('change',e=>toast('定时关闭：'+e.target.value));
+byId('fadeOut').addEventListener('change',e=>toast(e.target.checked?'已开启渐弱停止':'已关闭渐弱停止'));
+byId('loopAudio').addEventListener('change',e=>toast(e.target.checked?'已开启循环播放':'已关闭循环播放'));
+
+// 收藏白噪声：用 localStorage 保存，所以刷新页面或重新打开 App 后仍然记得。
+const favorites=new Set(JSON.parse(localStorage.getItem('sleep-pillow-favorites')||'[]'));
+function saveFavorites(){localStorage.setItem('sleep-pillow-favorites',JSON.stringify([...favorites]))}
+
+// 根据收藏列表动态生成“收藏”卡片内容。
+function renderFavorites(){
+ document.querySelectorAll('.fav').forEach(f=>{const on=favorites.has(f.dataset.fav);f.classList.toggle('active',on);f.textContent=on?'★':'☆'});
+ const list=byId('favoriteList');
+ if(favorites.size===0){list.innerHTML='<p class="muted small" style="margin:0">暂无收藏，点白噪声右侧星标即可添加。</p>';return}
+ list.innerHTML=[...favorites].map(name=>'<button class="listbtn favChoice" data-name="'+name+'"><div class="row"><div class="ico purple">★</div><div class="grow"><b>'+name+'</b><small>收藏白噪声</small></div><span>播放 ›</span></div></button>').join('');
+ list.querySelectorAll('.favChoice').forEach(b=>b.addEventListener('click',()=>{byId('trackName').textContent=b.dataset.name;byId('trackMeta').textContent='收藏白噪声';toast('已选择 '+b.dataset.name)}))
+}
+
+// 点击星标时添加/取消收藏。
+document.querySelectorAll('.fav').forEach(f=>f.addEventListener('click',e=>{
+ e.stopPropagation();const name=f.dataset.fav;
+ favorites.has(name)?favorites.delete(name):favorites.add(name);
+ saveFavorites();renderFavorites();toast(favorites.has(name)?'已加入收藏':'已取消收藏')
+}));
+renderFavorites();
+
+// 选择本地音乐文件后，把文件名展示到“我的音乐”区域。
+byId('musicFile').addEventListener('change',e=>{
+ const f=e.target.files[0];if(!f)return;
+ const safe=f.name.replace(/[<>]/g,'');
+ const wrap=byId('customMusic');
+ wrap.innerHTML='<button class="listbtn"><div class="row"><div class="ico purple">♫</div><div class="grow"><b>'+safe+'</b><small>本地自定义音乐</small></div><span>›</span></div></button>';
+ wrap.querySelector('button').addEventListener('click',()=>{byId('trackName').textContent=safe;byId('trackMeta').textContent='自定义音乐';toast('已选择自定义音乐')})
+});
+
+// 兼容旧的日历点击监听；日视图始终回到它自己的“昨夜主睡眠”。
+function selectRecord(){renderSelectedReport((reportViews.day||sleepReports).lastNight||null)}
+
+// 切换睡眠记录的日/周/月视图。
+function setRecordRange(mode){
+ activeRecordRange=mode;
+ document.querySelectorAll('[data-record-range]').forEach(b=>b.classList.toggle('active',b.dataset.recordRange===mode));
+ const ids={day:'recordDayPanel',week:'recordWeekPanel',month:'recordMonthPanel'};
+ document.querySelectorAll('.record-mode-panel').forEach(p=>p.classList.toggle('active',p.id===ids[mode]));
+ // 周/月日历点过任何日期都只影响各自详情；回到“日”必须恢复该日的主睡眠。
+ if(mode==='day')renderSelectedReport((reportViews.day||sleepReports).lastNight||null);
+ updatePeriodNavigation();
+}
+
+function requestReportPeriod(mode,date){
+ reportPeriodLoading[mode]=true;
+ updatePeriodNavigation();
+ toast('正在加载 '+reportDateLabel(date)+' 的睡眠记录');
+ notifyNative('server_sleep_reports_for_date',{date,viewMode:mode});
+}
+
+function shiftReportPeriod(mode,direction){
+ const data=reportViews[mode]||sleepReports,anchor=reportAnchor(data),today=localChinaDateKey();
+ let next=anchor;
+ if(mode==='day')next=shiftedReportDate(anchor,direction);
+ else if(mode==='week')next=shiftedReportDate(anchor,direction*7);
+ else next=shiftedReportMonth(anchor,direction);
+ if(next>today){toast('暂无未来日期的睡眠记录');return}
+ requestReportPeriod(mode,next);
+}
+
+// 睡眠记录和报告页的图表点击事件。
+document.querySelectorAll('#recordPane .day[data-record]').forEach(d=>d.addEventListener('click',()=>selectRecord(d.dataset.record)));
+document.querySelectorAll('[data-record-range]').forEach(b=>b.addEventListener('click',()=>setRecordRange(b.dataset.recordRange)));
+document.querySelectorAll('[data-report-shift]').forEach(button=>button.addEventListener('click',()=>shiftReportPeriod(button.dataset.reportShift,Number(button.dataset.reportDirection))));
+document.querySelectorAll('.stage').forEach(s=>s.addEventListener('click',()=>{
+ const target=s.closest('#recordPane')?byId('recordStageDetail'):byId('stageDetail');
+ target.textContent=s.dataset.stage
+}));
+
+// 问卷提醒由 Android 原生层安排，即使 WebView 关闭也能以系统通知提醒。
+byId('saveReminder').addEventListener('click',()=>{
+ const bedReminder=byId('bedReminder').value,morningReminder=byId('morningReminder').value;
+ localStorage.setItem('sleep-pillow-bed-reminder',bedReminder);localStorage.setItem('sleep-pillow-morning-reminder',morningReminder);
+ notifyNative('questionnaire_reminders_updated',{bedReminder,morningReminder});
+ toast('已保存系统提醒：睡前 '+bedReminder+'，晨起 '+morningReminder)
+});
+byId('checkReminderPermission').addEventListener('click',()=>notifyNative('questionnaire_reminder_status_requested'));
+byId('sendReminderTest').addEventListener('click',()=>notifyNative('questionnaire_reminder_test'));
+byId('scheduleReminderTest').addEventListener('click',()=>notifyNative('questionnaire_reminder_delayed_test'));
+byId('allowBackgroundReminder').addEventListener('click',()=>notifyNative('questionnaire_background_reminder_requested'));
+
+// 每日睡眠日记始终按中国日期归档：睡前是今晚，醒后属于昨晚同一睡眠夜。
+function chinaDateKey(offsetDays=0){const fields={};const instant=new Date(Date.now()+offsetDays*24*60*60*1000);new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(instant).forEach(part=>{fields[part.type]=part.value});return fields.year+'-'+fields.month+'-'+fields.day}
+function todayKey(){return chinaDateKey()}
+function yesterdayKey(){return chinaDateKey(-1)}
+const surveyTypeByKey={'psqi-before':'psqi_before','psqi-after':'psqi_after','daily-one':'pre_sleep','daily-two':'post_wake'};
+let serverQuestionnaireStatus={};let activeQuestionnaireType='';let pendingQuestionnaireSubmission=null;
+
+// 问卷题目由当前问卷星表单逐题转录。答案同时带着题干保存，管理员无需依赖 App 版本也能阅读历史记录。
+const frequencyOptions=['从未发生','每周≤1次','每周1–2次','每周≥3次'];
+const questionnaireDefinitions={
+ psqi_before:{title:'匹兹堡睡眠质量指数（PSQI）评分量表（实验前）',description:'请根据过去一个月的实际睡眠情况如实作答，预计用时约 5 分钟。',questions:[]},
+ psqi_after:{title:'匹兹堡睡眠质量指数（PSQI）评分量表（实验后）',description:'请根据过去一个月的实际睡眠情况如实作答，用于与实验前测进行对比。',questions:[]},
+ pre_sleep:{title:'共识睡眠日记（睡前版）',description:'请在睡前填写今天的上床前情况。',questions:[]},
+ post_wake:{title:'共识睡眠日记（醒来版）',description:'请在醒来后填写昨晚的睡眠情况。',questions:[]}
+};
+function field(id,label,type='text',options=[],help='',value='',visibleWhen=null,attachmentKey='',required=true){return{id,label,type,options,help,value,visibleWhen,attachmentKey,required}}
+const preSleepQuestions=[
+ field('identity','姓名＋学号（非山东大学学生可不填学号）'),field('gender','性别','radio',['男','女']),
+ field('experiment_date','实验日期','date',[],'请填写今天的实验日期',todayKey()),field('parameter_adjustment','今天是否为参数调整日（改参数★）？','radio',['是','否']),
+ field('parameter_adjustment_photo','请上传拨码开关照片','image',[],'支持 JPG、PNG 或 WebP，单张不超过 10 MB。','',{question:'parameter_adjustment',value:'是'},'parameter_adjustment_photo'),
+ field('nap','今天白天，你是否午睡或打盹？','radio',['是','否']),field('nap_detail','今天白天，你午睡或打盹了多少次，总共午睡或打盹了多长时间？','text',[],'例：2次 1h','',{question:'nap',value:'是'}),
+ field('alcohol','今天你是否喝了含酒精的饮料？','radio',['是','否']),field('alcohol_detail','今天你喝了多少杯含酒精的饮料，最近一次饮酒是什么时候？','text',[],'例：2杯 晚上9:20','',{question:'alcohol',value:'是'}),
+ field('caffeine','今天白天你是否喝了含咖啡因的饮料（咖啡、茶、汽水、能量饮料）？','radio',['是','否']),field('caffeine_detail','今天白天你喝了多少杯含咖啡因的饮料，最后一次喝这些饮料是什么时候？','text',[],'例：1杯 下午3:20','',{question:'caffeine',value:'是'}),
+ field('sleep_medication','你是否服用过任何非处方药或处方药来帮助入睡？','radio',['是','否']),field('sleep_medication_detail','如果是，请列出药物名称、剂量和服用时间','text',[],'例：Relax-Herb 50mg 晚上11:00','',{question:'sleep_medication',value:'是'}),
+ field('stress','您当前的总体压力状态是（上床前）？','radio',['非常放松','比较放松','一般','比较焦虑','非常焦虑']),field('physical_discomfort','今天是否有身体不适？','textarea',[],'例：无 / 我感冒了…')
+];
+const postWakeQuestions=[
+ field('identity','姓名＋学号（非山东大学学生可不填学号）'),field('experiment_date','实验日期（填昨晚的实验日期）','date',[],'请填写昨晚开始实验的日期',yesterdayKey()),
+ field('bed_time','你昨晚什么时候上床睡觉的（上床时间）？','text',[],'例：晚上10:15'),field('attempt_sleep_time','你什么时候尝试入睡的（放下手机打开设备的时间）？','text',[],'例：晚上11:00'),
+ field('sleep_latency','你感觉入睡用了多长时间（填主观感觉）？','text',[],'例：20min'),field('awakenings','你一共醒了几次（不包括最后一次觉醒），总计这些觉醒状态持续了多久？','text',[],'例：3次 30min'),
+ field('final_awake_time','你最后醒来是在什么时候？','text',[],'例：上午8:30'),field('early_awake','你是否比原计划更早醒来？','radio',['是','否','无计划']),
+ field('early_awake_advance','如果是的话提前了多久？','text',[],'例：50min','',{question:'early_awake',value:'是'}),
+ field('wake_method','你今天是以哪种方式醒来的？','radio',['自然醒来','被闹钟吵醒','被外部噪声吵醒（如街道、室友、设备提示音等）','被身体不适或生理需求（如尿意、疼痛等）唤醒','其他（请注明：______）']),
+ field('wake_method_other','请注明具体唤醒方式','text',[],'请填写具体情况','',{question:'wake_method',value:'其他（请注明：______）'}),
+ field('get_up_time','你今天是什么时候起床的？','text',[],'例：上午8:45'),field('sleep_quality','你如何评价昨晚的睡眠质量？','radio',['非常糟糕','比较糟糕','一般','良好','非常好']),
+ field('pillow_comfort','你对昨晚使用的枕头设备的舒适度评价是？','radio',['非常不舒服，需要调整','比较不舒服，但影响不大','一般','比较舒适','非常舒适']),
+ field('device_discomfort','你是否感受到枕头设备在工作时产生的任何不适感（如振动、发热、压迫感等）？','radio',['无不适感','轻微不适，不影响入睡','明显不适，影响入睡','严重不适，难以忍受']),
+ field('morning_feeling','当你醒来准备开始新的一天时，你感觉有多放松或精神焕发？','radio',['没有放松','有点放松','一般放松','较好放松','非常放松'])
+];
+const psqiQuestions=[
+ field('identity','姓名＋性别＋学号（非山东大学学生可不填学号）'),field('age','年龄'),field('contact','联系方式（微信/手机号）'),
+ field('bed_time','过去一个月，您通常几点上床睡觉？','time',[],'请选择时和分'),field('sleep_latency','过去一个月，您通常从上床到入睡需要多少时间？','radio',['≤15分钟','16-30分钟','31-60分钟','≥60分钟']),
+ field('wake_time','过去一个月，您通常几点起床？','time',[],'请选择时和分'),field('sleep_hours','过去一个月，您通常每晚实际睡了多长时间？','number',[],'请填写小时数，例如：7.5'),
+ field('problem_fall_asleep','入睡困难（30分钟内不能入睡）的频率','radio',frequencyOptions),field('problem_early_awake','夜间易醒或早醒的频率','radio',frequencyOptions),field('problem_toilet','夜间去厕所的频率','radio',frequencyOptions),field('problem_breathing','呼吸不畅的频率','radio',frequencyOptions),field('problem_snoring','咳嗽或鼾声高的频率','radio',frequencyOptions),field('problem_cold','感觉寒冷的频率','radio',frequencyOptions),field('problem_hot','感觉太热的频率','radio',frequencyOptions),field('problem_nightmare','做噩梦的频率','radio',frequencyOptions),field('problem_pain','感觉疼痛的频率','radio',frequencyOptions),field('problem_other_frequency','其他睡眠问题的频率','radio',frequencyOptions),
+ field('other_problem','其他睡眠问题请注明','textarea',[],'如无其他问题可填写“无”','','','',false),field('overall_quality','总的来说您认为您过去一个月的睡眠质量','radio',['很好','较好','较差','很差']),field('sleeping_medicine','近一个月，您使用药物催眠的频率','radio',frequencyOptions),field('fatigue','近一个月，您常感觉倦怠吗？','radio',frequencyOptions),field('low_energy','近一个月，您做事（如学习、吃饭、社交）感到精力不足的频率？','radio',['没有','偶尔有','有时有','经常有'])
+];
+questionnaireDefinitions.psqi_before.questions=psqiQuestions;questionnaireDefinitions.psqi_after.questions=psqiQuestions;questionnaireDefinitions.pre_sleep.questions=preSleepQuestions;questionnaireDefinitions.post_wake.questions=postWakeQuestions;
+
+function isSurveyDone(key){
+ const type=surveyTypeByKey[key],submission=serverQuestionnaireStatus[type];
+ // PSQI 前后测跨实验周期有效；睡前与醒后都比较本次睡眠夜的日期。
+ const sleepNightDate=type==='pre_sleep'?todayKey():type==='post_wake'?yesterdayKey():'';
+ return Boolean(submission)&&(sleepNightDate?submission.responseDate===sleepNightDate:true)
+}
+function updateSurveyBadges(){
+ const before=isSurveyDone('psqi-before'),after=isSurveyDone('psqi-after'),oneDone=isSurveyDone('daily-one'),twoDone=isSurveyDone('daily-two');
+ const psqi=byId('psqiBadge');psqi.textContent=before&&after?'前后测已提交':before?'前测已提交':after?'后测已提交':'实验前/后';psqi.classList.toggle('done',before&&after);
+ const dailyOne=byId('dailyOneBadge'),dailyTwo=byId('dailyTwoBadge');dailyOne.textContent=oneDone?'今晚已提交':'今晚';dailyTwo.textContent=twoDone?'昨夜已提交':'昨夜';dailyOne.classList.toggle('done',oneDone);dailyTwo.classList.toggle('done',twoDone);
+ document.querySelectorAll('[data-questionnaire-form]').forEach(button=>{const formType=button.dataset.questionnaireForm;const done=formType==='pre_sleep'?oneDone:formType==='post_wake'?twoDone:Boolean(serverQuestionnaireStatus[formType]);button.classList.toggle('done',done);const labels={psqi_before:['填写实验前测','重新填写前测'],psqi_after:['填写实验后测','重新填写后测'],pre_sleep:['填写 '+todayKey()+' 睡前问卷','重新填写 '+todayKey()+' 睡前问卷'],post_wake:['填写 '+yesterdayKey()+' 醒后问卷','重新填写 '+yesterdayKey()+' 醒后问卷']};button.textContent=(labels[formType]||['填写问卷','重新填写问卷'])[done?1:0]});
+ // 原生层保存完成状态，系统提醒才能在 App 未运行时跳过已填的每日问卷。
+ notifyNative('questionnaire_completion_changed',{type:'bed',date:todayKey(),completed:oneDone});notifyNative('questionnaire_completion_changed',{type:'morning',date:yesterdayKey(),completed:twoDone});
+}
+
+function createQuestionField(question){
+ const box=document.createElement('div');box.className='question';if(question.visibleWhen){box.dataset.visibleQuestion=question.visibleWhen.question;box.dataset.visibleValue=question.visibleWhen.value;box.hidden=true}const label=document.createElement('label');label.className='question-label';label.textContent=question.label;box.append(label);
+ if(question.help){const help=document.createElement('span');help.className='question-help';help.textContent=question.help;box.append(help)}
+ if(question.type==='radio'){
+  const options=document.createElement('div');options.className='options';question.options.forEach((option,index)=>{const row=document.createElement('label');row.className='option';const input=document.createElement('input');input.type='radio';input.name=question.id;input.value=option;input.required=Boolean(question.required&&index===0);input.dataset.required=question.required&&index===0?'1':'0';input.addEventListener('change',updateQuestionnaireConditionalFields);const text=document.createElement('span');text.textContent=option;row.append(input,text);options.append(row)});box.append(options);return box
+ }
+ if(question.type==='image'){
+  const input=document.createElement('input');input.type='file';input.name=question.id;input.accept='image/jpeg,image/png,image/webp';input.required=Boolean(question.required);input.dataset.required=question.required?'1':'0';input.dataset.attachmentKey=question.attachmentKey||question.id;box.append(input);return box
+ }
+ const input=question.type==='textarea'?document.createElement('textarea'):document.createElement('input');input.name=question.id;input.required=Boolean(question.required);input.dataset.required=question.required?'1':'0';if(question.type!=='textarea')input.type=question.type||'text';if(question.type==='number'){input.step='0.1';input.min='0'}if(question.value)input.value=question.value;box.append(input);return box
+}
+
+// 问卷星原表的追问题只在选择“是”或“其他”时显示；隐藏时禁用校验，提交时也不要求回答。
+function updateQuestionnaireConditionalFields(){
+ const form=byId('questionnaireForm');form.querySelectorAll('.question[data-visible-question]').forEach(box=>{
+  const selected=form.querySelector('[name="'+box.dataset.visibleQuestion+'"]:checked');const visible=Boolean(selected&&selected.value===box.dataset.visibleValue);
+  box.hidden=!visible;box.querySelectorAll('input,textarea,select').forEach(control=>{control.disabled=!visible;control.required=visible&&control.dataset.required==='1'})
+ })
+}
+
+function openQuestionnaireForm(type){
+ const definition=questionnaireDefinitions[type];if(!definition)return;pendingQuestionnaireSubmission=null;activeQuestionnaireType=type;const hasSubmission=type==='pre_sleep'?isSurveyDone('daily-one'):type==='post_wake'?isSurveyDone('daily-two'):Boolean(serverQuestionnaireStatus[type]);byId('questionnaireFormTitle').textContent=definition.title;byId('questionnaireFormDescription').textContent=definition.description;byId('questionnaireSubmitStatus').textContent='';const fields=byId('questionnaireFields');fields.replaceChildren();definition.questions.forEach(question=>fields.append(createQuestionField(question)));updateQuestionnaireConditionalFields();byId('questionnaireSubmit').disabled=false;byId('questionnaireSubmit').textContent=hasSubmission?'更新并重新提交':'提交问卷';open('questionnaire-form')
+}
+
+function answerResponseDate(){return activeQuestionnaireType==='post_wake'?yesterdayKey():todayKey()}
+function submitActiveQuestionnaire(event){
+ event.preventDefault();const definition=questionnaireDefinitions[activeQuestionnaireType];if(!definition)return;const form=byId('questionnaireForm');if(!form.reportValidity())return;
+ const answers={};let imageQuestion=null;definition.questions.forEach(question=>{const chosen=form.querySelector('[name="'+question.id+'"]:checked');const control=chosen||form.querySelector('[name="'+question.id+'"]');if(!control||control.disabled)return;if(question.type==='image'){imageQuestion=question;return}answers[question.id]={question:question.label,value:control.value}});
+ const responseDate=answerResponseDate();byId('questionnaireSubmit').disabled=true;
+ if(imageQuestion){
+  const control=form.querySelector('[name="'+imageQuestion.id+'"]');const file=control&&control.files&&control.files[0];
+  if(!file){byId('questionnaireSubmit').disabled=false;byId('questionnaireSubmitStatus').textContent='请先选择参数调整照片。';return}
+  pendingQuestionnaireSubmission={questionnaireType:activeQuestionnaireType,responseDate,answers,attachmentKey:imageQuestion.attachmentKey||imageQuestion.id,attachmentQuestionId:imageQuestion.id,attachmentQuestionLabel:imageQuestion.label};
+  byId('questionnaireSubmitStatus').textContent='正在上传参数调整照片…';notifyNative('server_questionnaire_attachment_upload',{questionnaireType:activeQuestionnaireType,responseDate,attachmentKey:pendingQuestionnaireSubmission.attachmentKey});return
+ }
+ byId('questionnaireSubmitStatus').textContent='正在提交到服务器…';notifyNative('server_questionnaire_submit',{questionnaireType:activeQuestionnaireType,responseDate,answers});
+}
+document.querySelectorAll('[data-questionnaire-form]').forEach(button=>button.addEventListener('click',()=>openQuestionnaireForm(button.dataset.questionnaireForm)));byId('questionnaireForm').addEventListener('submit',submitActiveQuestionnaire);
+byId('bedReminder').value=localStorage.getItem('sleep-pillow-bed-reminder')||byId('bedReminder').value;
+byId('morningReminder').value=localStorage.getItem('sleep-pillow-morning-reminder')||byId('morningReminder').value;
+updateSurveyBadges();
+
+// 切换日间/夜间主题，并保存到 localStorage。
+function applyTheme(mode){
+ const actual=mode==='day'?'day':'night';
+ document.body.classList.toggle('theme-day',actual==='day');
+ document.querySelector('meta[name="theme-color"]').setAttribute('content',actual==='day'?'#eadbd1':'#07172f');
+ byId('themeLabel').textContent=actual==='day'?'日间版':'夜间版';
+ document.querySelectorAll('[data-theme]').forEach(b=>b.classList.toggle('active',b.dataset.theme===actual));
+ localStorage.setItem('sleep-pillow-theme',actual)
+}
+
+// 设置页：主题、大字体、长辈模式、作息目标。
+document.querySelectorAll('[data-theme]').forEach(b=>b.addEventListener('click',()=>applyTheme(b.dataset.theme)));
+byId('largeFont').addEventListener('change',e=>{document.body.classList.toggle('font-large',e.target.checked);localStorage.setItem('sleep-pillow-large-font',e.target.checked?'1':'0')});
+byId('elderMode').addEventListener('change',e=>{document.body.classList.toggle('elder-mode',e.target.checked);localStorage.setItem('sleep-pillow-elder-mode',e.target.checked?'1':'0')});
+byId('saveGoals').addEventListener('click',()=>toast('已保存目标：'+byId('targetBed').value+' 入睡，'+byId('targetWake').value+' 起床'));
+
+// 页面启动时恢复上次保存的状态。
+applyTheme(localStorage.getItem('sleep-pillow-theme')||'night');
+setDeviceState(localStorage.getItem('sleep-pillow-device-state')||'lowBattery');
+// 旧版本曾把“上次连接过”误当作“当前仍连接”。迁移时只保留绑定关系，
+// 当前 GATT 状态必须等待 Android 的 ready/disconnected 回调。
+try{
+ const legacyConnectedDevice=JSON.parse(localStorage.getItem('sleep-pillow-connected-device')||'null');
+ if(legacyConnectedDevice&&legacyConnectedDevice.address&&!boundDevices.some(device=>sameBleAddress(device.address,legacyConnectedDevice.address))){
+  boundDevices.push(legacyConnectedDevice);localStorage.setItem('sleep-pillow-bound-devices',JSON.stringify(boundDevices));
+ }
+}catch(error){}
+connectedBleDevice=null;localStorage.removeItem('sleep-pillow-connected-device');
+renderBleConnection();
+applyWifiConnectionState();
+renderRemoteSyncStatus();
+restoreStimTimer();
+startSleepTicker();
+
+// 页面从后台回来或重新获得焦点时，立刻刷新睡眠计时和助眠计时。
+document.addEventListener('visibilitychange',()=>{renderSleepSessionState();syncStimTimer()});
+window.addEventListener('focus',()=>{renderSleepSessionState();syncStimTimer()});
+
+// 恢复大字体和长辈模式开关。
+if(localStorage.getItem('sleep-pillow-large-font')==='1'){byId('largeFont').checked=true;document.body.classList.add('font-large')}
+if(localStorage.getItem('sleep-pillow-elder-mode')==='1'){byId('elderMode').checked=true;document.body.classList.add('elder-mode')}
+
+// Android 原生层通过这个公开对象调用页面的返回、计时和 BLE 状态更新。
+window.SleepPillowPrototype={
+ canGoBack:()=>stack.length>0,
+ back,
+ refreshFromNative,
+ onBleEvent,
+ onServerEvent,
+ onNativeEvent,
+ openInfoDetails,
+ closeInfoDetails,
+ requestSleepStart,
+ showWakeQuestionnairePrompt,
+ openQuestionnairesFromNotification:(type)=>{
+  openQuestionnaireForm(type==='bed'?'pre_sleep':'post_wake');
+  notifyNative('server_questionnaire_status_requested');
+  toast(type==='bed'?'请完成睡前问卷':'请完成醒后问卷')
+ }
+};
+
+// 首页显示今天日期；最后把底部导航初始化为登录页状态。
+const d=new Date();byId('today').textContent=(d.getMonth()+1)+'月'+d.getDate()+'日';
+setNav('login');
+})();
+</script>
+</body>
+</html>

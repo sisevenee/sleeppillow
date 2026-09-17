@@ -1,0 +1,56 @@
+# ============================================================
+# 智能睡眠枕工程 —— Git 忽略规则
+#
+# 重点：secrets/ 与 data/ 是服务器上的凭据和运行时数据，
+#       一旦入库就会把数据库密码写进历史，绝不能提交。
+# ============================================================
+
+# ---- 敏感信息与运行时数据（绝不入库）----
+secrets/
+data/
+*.env
+.env
+
+# ---- 固件：由 firmware/ 内自带的独立仓库管理 ----
+# 若要改成统一管理，删除本行并移除 firmware 下的 .git
+firmware/
+
+# ---- Android / Gradle 构建产物 ----
+build/
+.gradle/
+.idea/
+local.properties
+*.iml
+captures/
+.cxx/
+
+# ---- 打包归档与发布产物 ----
+outputs/
+*.apk
+*.aab
+*.zip
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# ---- 日志、备份与临时文件 ----
+*.log
+*.err
+*.bak
+*.bak-*
+*.orig
+*.rej
+*.tmp
+*~
+
+# ---- 工具本地状态 ----
+.workbuddy/
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini

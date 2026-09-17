@@ -51,9 +51,14 @@ CREATE TABLE IF NOT EXISTS telemetry (
 -- 一次连续的睡眠枕监测会话由 ESP32 上传的连续数据自动创建和结束。首条有效采样
 -- 代表设备上电后开始工作；last_sample_at 用于判断设备断电或停止采集：连续 15 分钟
 -- 没有新数据时，后端以最后一条数据为结束时间。
+-- user_id 记录“该时刻正在使用这台设备的受试者”，是会话归属链的关键字段。
+-- 允许 NULL：ESP32 可能在 App 登录或选择设备之前就已经在上传数据，此时无法确定归属。
+-- 查询侧统一用 COALESCE(s.user_id, 该设备当前用户) 兜底，因此 NULL 不会导致数据消失。
+-- 外键用 ON DELETE SET NULL：受试者退出不应连带删除已采集到的整夜数据。
 CREATE TABLE IF NOT EXISTS sleep_sessions (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     device_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NULL,
     started_at DATETIME NOT NULL,
     ended_at DATETIME NULL,
     last_sample_at DATETIME NULL,
@@ -64,8 +69,11 @@ CREATE TABLE IF NOT EXISTS sleep_sessions (
     PRIMARY KEY (id),
     KEY idx_sleep_sessions_device_active (device_id, ended_at, last_sample_at),
     KEY idx_sleep_sessions_device_ended (device_id, ended_at),
+    KEY idx_sleep_sessions_user_ended (user_id, ended_at),
     CONSTRAINT fk_sleep_sessions_device
-      FOREIGN KEY (device_id) REFERENCES devices (id) ON DELETE CASCADE
+      FOREIGN KEY (device_id) REFERENCES devices (id) ON DELETE CASCADE,
+    CONSTRAINT fk_sleep_sessions_user
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- App 登录账号。普通账号仅用于登录和保存当前选择的设备；管理员账号可查看全部设备。

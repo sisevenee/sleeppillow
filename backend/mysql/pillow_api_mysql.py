@@ -55,6 +55,9 @@ MAX_QUESTIONNAIRE_ANSWER_BYTES = 12 * 1024
 QUESTIONNAIRE_ATTACHMENT_KEYS = frozenset({"parameter_adjustment_photo"})
 SLEEP_MARKER_TYPES = frozenset({"prepare", "wake"})
 MAX_ADMIN_EXPORT_DAYS = 31
+# The completeness matrix renders one column per day, so a wide range is unusable rather than
+# merely slow. A full 4-week experiment block plus slack is the intended ceiling.
+MAX_COMPLETENESS_DAYS = 62
 
 
 def db_connection() -> pymysql.connections.Connection:
@@ -487,6 +490,33 @@ def current_device(connection: pymysql.connections.Connection, user_id: int) -> 
         return cursor.fetchone()
 
 
+def device_owner_user_id(connection: pymysql.connections.Connection, device_database_id: int) -> int | None:
+    """Return the ordinary user who currently has this device selected, if any.
+
+    This is the live source for session attribution: the ESP32 uploads without any user
+    identity, so the person holding the device at upload time is the best available answer.
+    It cannot recover a session recorded before the device changed hands, which is exactly
+    what sleep_sessions.user_id exists to preserve.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT u.id AS user_id
+            FROM user_current_devices ucd
+            JOIN users u ON u.id = ucd.user_id
+            WHERE ucd.device_id = %s AND u.role = 'user' AND u.is_active = 1
+            """,
+            (device_database_id,),
+        )
+        row = cursor.fetchone()
+    return int(row["user_id"]) if row is not None else None
+
+
+def attribute_new_session(connection: pymysql.connections.Connection, device_database_id: int) -> int | None:
+    """Resolve the owner to stamp onto a newly opened session. Call once per new session."""
+    return device_owner_user_id(connection, device_database_id)
+
+
 def close_stale_sessions(connection: pymysql.connections.Connection, device_database_id: int) -> None:
     """Close only sessions whose device has been silent long enough to be considered off."""
     with connection.cursor() as cursor:
@@ -549,12 +579,14 @@ def attach_telemetry_to_session(
             # The device data is the sole authority for a monitoring session. In particular,
             # an App-side “prepare to sleep” or “wake” marker must never suppress continuous
             # telemetry from an ESP32 that is still powered and collecting data.
+            # Attribution is fixed once, at session creation. A later device handover must not
+            # rewrite who this historical night belonged to.
             cursor.execute(
                 """
-                INSERT INTO sleep_sessions (device_id, started_at, last_sample_at, start_source)
-                VALUES (%s, %s, %s, 'telemetry')
+                INSERT INTO sleep_sessions (device_id, user_id, started_at, last_sample_at, start_source)
+                VALUES (%s, %s, %s, %s, 'telemetry')
                 """,
-                (device_database_id, sampled_at, sampled_at),
+                (device_database_id, attribute_new_session(connection, device_database_id), sampled_at, sampled_at),
             )
             return
         last_sample = active_session["last_sample_at"]
@@ -571,10 +603,10 @@ def attach_telemetry_to_session(
             )
             cursor.execute(
                 """
-                INSERT INTO sleep_sessions (device_id, started_at, last_sample_at, start_source)
-                VALUES (%s, %s, %s, 'telemetry')
+                INSERT INTO sleep_sessions (device_id, user_id, started_at, last_sample_at, start_source)
+                VALUES (%s, %s, %s, %s, 'telemetry')
                 """,
-                (device_database_id, sampled_at, sampled_at),
+                (device_database_id, attribute_new_session(connection, device_database_id), sampled_at, sampled_at),
             )
             return
         cursor.execute(
@@ -770,14 +802,181 @@ def select_last_night_report(sessions: list[dict[str, Any]], now: datetime) -> d
     return None
 
 
+def china_date_key(value: datetime | None) -> str | None:
+    """Render a stored UTC timestamp as the China-local calendar date it belongs to."""
+    if value is None:
+        return None
+    return format_china_datetime(value).split(" ", 1)[0]
+
+
+def load_completeness_matrix(
+    connection: pymysql.connections.Connection, start_day: date, end_day: date,
+) -> dict[str, Any]:
+    """Build the participant x sleep-night data-completeness matrix.
+
+    A row is one active ordinary participant; a column is one China-local sleep-night date.
+    Every column is present even when a participant contributed nothing, because a visibly
+    empty cell is the signal the researcher is looking for.
+
+    Cell status:
+      missing — no monitoring record and no questionnaire for that night
+      partial — something arrived, but at least one of the three expected pieces is absent
+      complete — a sleep session plus both the bedtime and next-morning questionnaire
+    """
+    day_count = (end_day - start_day).days + 1
+    if day_count < 1:
+        raise ValueError("start must not be later than end")
+    if day_count > MAX_COMPLETENESS_DAYS:
+        raise ValueError(f"Date range must not exceed {MAX_COMPLETENESS_DAYS} days")
+    days = [(start_day + timedelta(days=offset)).isoformat() for offset in range(day_count)]
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT id, username FROM users
+            WHERE role = 'user' AND is_active = 1
+            ORDER BY username
+            """
+        )
+        participants = cursor.fetchall()
+
+        # Sessions are grouped by the China-local date on which monitoring ended, matching the
+        # export rule: a 22:00--08:00 recording belongs to the morning date.
+        # SUM() over a TIMESTAMPDIFF yields a plain integer, unlike a SUM over a DATETIME
+        # difference, which the driver hands back as a Decimal of the form HHMMSS.
+        cursor.execute(
+            """
+            SELECT COALESCE(s.user_id, ucd.user_id) AS user_id,
+                   DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR)) AS sleep_night,
+                   COUNT(DISTINCT s.id) AS session_count,
+                   SUM(TIMESTAMPDIFF(SECOND, s.started_at, COALESCE(s.ended_at, s.last_sample_at))) AS total_seconds
+            FROM sleep_sessions s
+            JOIN devices d ON d.id = s.device_id
+            LEFT JOIN user_current_devices ucd ON ucd.device_id = d.id
+            WHERE s.last_sample_at IS NOT NULL
+              AND COALESCE(s.user_id, ucd.user_id) IS NOT NULL
+              AND DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR))
+                  BETWEEN %s AND %s
+            GROUP BY user_id, sleep_night
+            """,
+            (start_day, end_day),
+        )
+        session_rows = cursor.fetchall()
+
+        # Questionnaire submitters per night, keyed by user rather than by device. A sleep diary
+        # is filled by a named participant, so this shows who was actually in the study that night.
+        cursor.execute(
+            """
+            SELECT user_id, questionnaire_type,
+                   DATE_FORMAT(response_date, '%%Y-%%m-%%d') AS response_date
+            FROM questionnaire_submissions
+            WHERE response_date BETWEEN %s AND %s
+            """,
+            (start_day, end_day),
+        )
+        questionnaire_rows = cursor.fetchall()
+
+        # Device-level sessions per night, independent of attribution. Used only to detect a night
+        # that was physically recorded while the session was credited to someone else: the raw
+        # ESP32 data exists, so calling that night "missing" would overstate the gap and send the
+        # researcher looking for a hardware problem that never happened.
+        cursor.execute(
+            """
+            SELECT DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR)) AS sleep_night,
+                   COUNT(DISTINCT s.id) AS session_count,
+                   GROUP_CONCAT(DISTINCT COALESCE(u.username, '未归属') ORDER BY u.username) AS owners
+            FROM sleep_sessions s
+            LEFT JOIN users u ON u.id = s.user_id
+            WHERE s.last_sample_at IS NOT NULL
+              AND DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR))
+                  BETWEEN %s AND %s
+            GROUP BY sleep_night
+            """,
+            (start_day, end_day),
+        )
+        device_night_rows = cursor.fetchall()
+
+    sessions_by_key: dict[tuple[int, str], dict[str, Any]] = {}
+    for row in session_rows:
+        key = (int(row["user_id"]), row["sleep_night"].isoformat())
+        entry = sessions_by_key.setdefault(key, {"sessionCount": 0, "monitoringSeconds": 0})
+        entry["sessionCount"] += int(row["session_count"])
+        entry["monitoringSeconds"] += max(0, int(row["total_seconds"] or 0))
+
+    questionnaires_by_key: dict[tuple[int, str], set[str]] = {}
+    for row in questionnaire_rows:
+        key = (int(row["user_id"]), row["response_date"])
+        questionnaires_by_key.setdefault(key, set()).add(row["questionnaire_type"])
+
+    device_nights: dict[str, dict[str, Any]] = {
+        row["sleep_night"].isoformat(): {
+            "sessionCount": int(row["session_count"]),
+            "owners": row["owners"] or "",
+        }
+        for row in device_night_rows
+    }
+
+    matrix: list[dict[str, Any]] = []
+    for participant in participants:
+        user_id = int(participant["id"])
+        cells: list[dict[str, Any]] = []
+        for day in days:
+            key = (user_id, day)
+            session = sessions_by_key.get(key)
+            completed = questionnaires_by_key.get(key, set())
+            device_night = device_nights.get(day)
+            cell = {
+                "date": day,
+                "hasSession": session is not None,
+                "sessionCount": session["sessionCount"] if session else 0,
+                "monitoringSeconds": session["monitoringSeconds"] if session else 0,
+                "hasPreSleep": "pre_sleep" in completed,
+                "hasPostWake": "post_wake" in completed,
+                # How many sessions the device recorded that night, whoever they were credited to.
+                "nightSessionCount": device_night["sessionCount"] if device_night else 0,
+                "nightOwners": device_night["owners"] if device_night else "",
+            }
+            if cell["hasSession"] and cell["hasPreSleep"] and cell["hasPostWake"]:
+                cell["status"] = "complete"
+            elif not cell["hasSession"] and not cell["hasPreSleep"] and not cell["hasPostWake"]:
+                cell["status"] = "missing"
+            else:
+                cell["status"] = "partial"
+            cell["mismatch"] = (
+                not cell["hasSession"]
+                and cell["nightSessionCount"] > 0
+                and (cell["hasPreSleep"] or cell["hasPostWake"])
+            )
+            cells.append(cell)
+        matrix.append({"username": participant["username"], "cells": cells})
+
+    totals = {"complete": 0, "partial": 0, "missing": 0, "mismatch": 0}
+    for row in matrix:
+        for cell in row["cells"]:
+            totals[cell["status"]] += 1
+            if cell["mismatch"]:
+                totals["mismatch"] += 1
+    return {
+        "startDate": start_day.isoformat(),
+        "endDate": end_day.isoformat(),
+        "dates": days,
+        "participants": matrix,
+        "totals": totals,
+    }
+
+
 def load_admin_sleep_export_sessions(
     connection: pymysql.connections.Connection, start_utc: datetime, end_utc: datetime,
 ) -> list[dict[str, Any]]:
-    """Load finished or safely stale sessions for every currently selected ordinary user.
+    """Load finished or safely stale sessions for every attributed ordinary user.
 
     A session is grouped by the China-local day on which its last sample occurred. This means an
     22:00--08:00 recording appears under the morning date, regardless of when the user went to bed.
     Stale open sessions are read as finished without mutating database state during a download.
+
+    Attribution prefers s.user_id, which was stamped when the session was created. The fallback
+    to user_current_devices only covers rows recorded before that column existed: it answers
+    "who owns this device now", which is wrong after a handover, so it must never take priority.
     """
     with connection.cursor() as cursor:
         cursor.execute(
@@ -790,14 +989,15 @@ def load_admin_sleep_export_sessions(
                    COUNT(t.id) AS record_count, AVG(t.heart_rate) AS average_heart_rate,
                    AVG(t.respiratory_rate) AS average_respiratory_rate,
                    AVG(t.temperature) AS average_temperature
-            FROM users u
-            JOIN user_current_devices ucd ON ucd.user_id = u.id
-            JOIN devices d ON d.id = ucd.device_id AND d.is_active = 1
-            JOIN sleep_sessions s ON s.device_id = d.id
+            FROM sleep_sessions s
+            JOIN devices d ON d.id = s.device_id
+            LEFT JOIN user_current_devices ucd ON ucd.device_id = d.id
+            JOIN users u ON u.id = COALESCE(s.user_id, ucd.user_id)
+                AND u.role = 'user' AND u.is_active = 1
             LEFT JOIN telemetry t ON t.device_id = s.device_id
                 AND t.sampled_at >= s.started_at
                 AND t.sampled_at <= COALESCE(s.ended_at, s.last_sample_at)
-            WHERE u.role = 'user' AND u.is_active = 1 AND s.last_sample_at IS NOT NULL
+            WHERE s.last_sample_at IS NOT NULL
               AND (
                     (s.ended_at IS NOT NULL AND s.ended_at >= %s AND s.ended_at < %s)
                  OR (s.ended_at IS NULL
@@ -1343,6 +1543,31 @@ class PillowApiHandler(BaseHTTPRequestHandler):
                 archive = sleep_export_zip(connection, sessions)
             filename = f"sleep_{start_day.isoformat()}_to_{end_day.isoformat()}_all_users.zip"
             self.send_download("application/zip", filename, archive)
+            return
+
+        if parsed.path == "/api/v1/admin/completeness":
+            if user["role"] != "admin":
+                self.send_json(HTTPStatus.FORBIDDEN, {"error": "Administrator access is required"})
+                return
+            query = parse_qs(parsed.query)
+            requested_start = query.get("start", [""])[0].strip()
+            requested_end = query.get("end", [""])[0].strip()
+            if not requested_start or not requested_end:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "start and end must be YYYY-MM-DD"})
+                return
+            try:
+                start_day = parse_questionnaire_date(requested_start)
+                end_day = parse_questionnaire_date(requested_end)
+            except ValueError:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "start and end must be YYYY-MM-DD"})
+                return
+            with db_connection() as connection:
+                try:
+                    payload = load_completeness_matrix(connection, start_day, end_day)
+                except ValueError as error:
+                    self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
+                    return
+            self.send_json(HTTPStatus.OK, payload)
             return
 
         if parsed.path == "/api/v1/admin/users":

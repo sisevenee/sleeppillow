@@ -17,6 +17,23 @@
     .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}.metric{padding:12px;background:#f6f8fc;border-radius:6px}.metric b{font-size:21px;display:block;margin-top:5px}.metric span{font-size:12px;color:#657085}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:9px;border-bottom:1px solid #e6ebf2;text-align:left;white-space:nowrap}th{color:#657085;font-weight:600}.empty{padding:28px 0;text-align:center;color:#657085}.error{min-height:20px;color:#b52d2d;font-size:13px}.hidden{display:none!important}.completion-ok,.completion-missing{display:inline-block;padding:3px 7px;border-radius:99px;font-size:12px}.completion-ok{color:#137342;background:#e7f7ee}.completion-missing{color:#8d5521;background:#fff2d9}.answer-detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-top:16px}.answer-list{display:grid;gap:10px;margin-top:12px}.answer-row{border:1px solid #e0e7f0;border-radius:6px;padding:10px}.answer-row b,.answer-row span{display:block}.answer-row span{white-space:pre-wrap;line-height:1.55;margin-top:5px;color:#26364b}.answer-attachment{margin-top:9px}.answer-image{display:block;max-width:100%;max-height:280px;margin-top:10px;border:1px solid #dbe2ec;border-radius:5px;background:#f6f8fc}
     .chart-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:4px 0 18px}.chart{margin:0;border:1px solid #dbe2ec;border-radius:6px;padding:11px;background:#fff}.chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}.chart-head b{font-size:14px;display:block}.chart-head span{font-size:12px;color:#657085}.chart-tools{display:flex;align-items:center;gap:8px;min-width:0}.chart-expand,.modal-close{width:30px;height:30px;padding:0;display:grid;place-items:center;border:1px solid #c8d2e0;background:#fff;color:#245bbd;border-radius:5px;font-size:18px;line-height:1}.chart-expand:hover,.modal-close:hover{background:#eef5ff}.chart canvas{display:block;width:100%;height:155px;background:#fbfcff;border:1px solid #edf1f6;border-radius:4px;cursor:crosshair}.chart figcaption{font-size:12px;color:#657085;margin-top:8px;line-height:1.5}.legend{display:flex;gap:9px;flex-wrap:wrap;font-size:12px;color:#536174}.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.chart-range{font-size:12px;color:#657085;margin:-4px 0 12px}.chart-empty{height:155px;display:grid;place-items:center;color:#657085;background:#fbfcff;border:1px solid #edf1f6;border-radius:4px;font-size:14px}.chart-modal{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px}.chart-modal-backdrop{position:absolute;inset:0;background:#17203399}.chart-dialog{position:relative;width:min(960px,100%);background:#fff;border-radius:8px;border:1px solid #dbe2ec;box-shadow:0 20px 60px #1720334d;padding:18px}.chart-dialog-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px}.chart-dialog h2{font-size:18px;margin:0 0 5px}.chart-dialog canvas{display:block;width:100%;height:420px;background:#fbfcff;border:1px solid #edf1f6;border-radius:5px;cursor:crosshair}.chart-dialog p{font-size:12px;color:#657085;line-height:1.5}.chart-dialog .legend{justify-content:flex-end}.chart-tooltip{position:fixed;z-index:30;max-width:260px;padding:9px 11px;border-radius:5px;background:#172033;color:#fff;box-shadow:0 8px 24px #17203333;font-size:12px;line-height:1.55;white-space:pre-line;pointer-events:none;font-variant-numeric:tabular-nums}
     .fixed-col{background:#f8faff;border-left:1px solid #e6ebf2}
+    .completeness-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#536174;margin:2px 0 14px}
+    .completeness-legend span{display:flex;align-items:center;gap:6px}
+    .completeness-legend i{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid #dbe2ec}
+    .matrix-wrap{overflow:auto;max-width:100%}
+    table.matrix{border-collapse:separate;border-spacing:3px;font-size:12px}
+    table.matrix th{position:sticky;top:0;background:#fff;z-index:2;padding:6px 8px;border:0;border-bottom:1px solid #dbe2ec;text-align:center;white-space:nowrap}
+    table.matrix th.matrix-name{position:sticky;left:0;z-index:3;text-align:left;min-width:96px;background:#fff}
+    table.matrix td{border:0;padding:0}
+    table.matrix td.matrix-name{position:sticky;left:0;z-index:1;background:#fff;padding:6px 10px 6px 0;font-weight:600;white-space:nowrap}
+    .cell{width:34px;height:30px;border-radius:5px;display:grid;place-items:center;font-size:11px;font-weight:700;border:1px solid transparent;cursor:default}
+    .cell-complete{background:#e7f7ee;color:#137342;border-color:#bfe6d2}
+    .cell-partial{background:#fff2d9;color:#8d5521;border-color:#f0dcae}
+    .cell-missing{background:#f4f6f9;color:#aab3c0;border-color:#e6ebf2}
+    .cell-attention{background:#fdecec;color:#a32626;border-color:#f3c9c9;cursor:help}
+    .matrix-summary{display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;font-size:13px}
+    .matrix-summary b{font-size:18px;display:block;margin-top:3px}
+    .matrix-hint{font-size:12px;color:#657085;margin-top:10px;line-height:1.6}
     @media(max-width:1040px){.chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:820px){.shell{padding:20px 14px}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.topbar{align-items:flex-start;flex-direction:column}.chart-grid{grid-template-columns:1fr}.chart canvas{height:190px}.chart-dialog canvas{height:340px}}
   </style>
@@ -43,6 +60,7 @@
       <nav class="tabbar" aria-label="管理内容切换">
         <button class="tab active" type="button" data-admin-panel="overview">总览</button>
         <button class="tab" type="button" data-admin-panel="questionnaires">问卷回收</button>
+        <button class="tab" type="button" data-admin-panel="completeness">数据完整度</button>
         <button class="tab" type="button" data-admin-panel="devices">设备数据</button>
       </nav>
       <section id="adminPanel-overview" class="admin-panel active">
@@ -69,6 +87,33 @@
         <section class="panel">
           <div class="panel-head"><div><h2>批量导出</h2><p class="muted">问卷按睡眠夜日期导出；睡眠记录按监测结束的中国日期归档。</p></div></div>
           <div class="actions" style="align-items:end"><label class="muted">开始日期<input id="batchExportStart" type="date" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"></label><label class="muted">结束日期<input id="batchExportEnd" type="date" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"></label><label class="muted">问卷类型<select id="questionnaireExportType" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"><option value="">全部问卷</option><option value="pre_sleep">睡前问卷</option><option value="post_wake">醒后问卷</option><option value="psqi_before">PSQI 前测</option><option value="psqi_after">PSQI 后测</option></select></label><button class="secondary" id="exportQuestionnaires">导出问卷 CSV</button><button id="exportSleep">导出睡眠 ZIP</button></div>
+        </section>
+      </section>
+      <section id="adminPanel-completeness" class="admin-panel">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>数据完整度矩阵</h2>
+              <p class="muted">行是受试者，列是睡眠夜（以中国日期计，22:00–08:00 的记录归入结束那天）。「睡眠记录」按会话归属的受试者统计，不再取决于设备现在归谁所有。</p>
+            </div>
+            <div class="actions">
+              <label class="muted">开始日期<input id="completenessStart" type="date" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"></label>
+              <label class="muted">结束日期<input id="completenessEnd" type="date" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"></label>
+              <button class="secondary" id="refreshCompleteness">查询</button>
+            </div>
+          </div>
+          <div class="completeness-legend">
+            <span><i style="background:#e7f7ee;border-color:#bfe6d2"></i>完整：睡眠记录 + 睡前 + 醒后</span>
+            <span><i style="background:#fff2d9;border-color:#f0dcae"></i>部分：缺其中一项</span>
+            <span><i style="background:#f4f6f9"></i>缺失：当晚全部为空</span>
+            <span><i style="background:#fdecec;border-color:#f3c9c9"></i>待核对归属：当晚设备有记录，但算在了别人名下</span>
+          </div>
+          <div id="completenessEmpty" class="empty">选择日期范围后查看受试者 × 睡眠夜矩阵。</div>
+          <div id="completenessContent" class="hidden">
+            <div class="matrix-wrap"><table class="matrix"><thead><tr id="completenessHead"></tr></thead><tbody id="completenessRows"></tbody></table></div>
+            <div class="matrix-summary" id="completenessSummary"></div>
+            <p class="matrix-hint">单元格内上排三个字母：<b>睡</b> = 本人名下有睡眠记录、<b>前</b> = 睡前问卷已填、<b>后</b> = 醒后问卷已填；缺失项以浅灰底显示。点为红色表示当晚设备确实采集了数据，但会话归属到了别的受试者，需要人工核对；把鼠标停在格子上可看当晚明细。</p>
+          </div>
         </section>
       </section>
       <section id="adminPanel-devices" class="admin-panel">
@@ -154,6 +199,59 @@
     function renderQuestionnaireItems(items){const rows=byId('questionnaireRows');rows.textContent='';setText('questionnaireCount',items.length+' 份问卷');items.forEach(item=>{const row=document.createElement('tr');[item.username,questionnaireNames[item.questionnaireType]||item.questionnaireType,item.responseDate,formatTime(item.submittedAt||item.updatedAt)].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell)});const cell=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='查看答案';button.onclick=()=>openQuestionnaireAnswer(item,button,'查看答案','收起答案');cell.append(button);row.append(cell);rows.append(row)});if(!items.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=5;cell.className='empty';cell.textContent='所选日期暂无问卷提交记录。';row.append(cell);rows.append(row)}}
     function renderPsqiItems(items){const rows=byId('psqiRows');rows.textContent='';setText('psqiCount',items.length+' 份量表');items.forEach(item=>{const row=document.createElement('tr');[item.username,questionnaireNames[item.questionnaireType]||item.questionnaireType].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell)});const score=document.createElement('td');score.textContent=psqiScoreLabel(item);score.className=item.psqiScoreStatus==='complete'?'score':'score-incomplete';row.append(score);[item.responseDate,formatTime(item.submittedAt||item.updatedAt)].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell)});const cell=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='查看详情';button.onclick=()=>openQuestionnaireAnswer(item,button,'查看详情','收起详情');cell.append(button);row.append(cell);rows.append(row)});if(!items.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=6;cell.className='empty';cell.textContent='尚未收到 PSQI 前测或后测。';row.append(cell);rows.append(row)}}
     async function loadQuestionnaires(){const date=byId('questionnaireDate').value||chinaDateValue();const data=await api('/api/v1/admin/questionnaires?'+new URLSearchParams({date}));closeQuestionnaireAnswer();questionnaireItems=data.items||[];psqiItems=data.psqiItems||[];renderQuestionnaireCompletion(data.completion||[]);renderQuestionnaireItems(questionnaireItems);renderPsqiItems(psqiItems)}
+    async function loadCompleteness(){
+      const start=byId('completenessStart').value,end=byId('completenessEnd').value;
+      if(!start||!end||start>end)throw new Error('请选择有效的开始和结束日期。');
+      const data=await api('/api/v1/admin/completeness?'+new URLSearchParams({start,end}));
+      renderCompleteness(data);
+    }
+    function matrixShortDate(isoDate){return isoDate.slice(5).replace('-','/')}
+    function renderCompleteness(data){
+      byId('completenessEmpty').classList.add('hidden');
+      byId('completenessContent').classList.remove('hidden');
+      const head=byId('completenessHead');head.textContent='';
+      const corner=document.createElement('th');corner.className='matrix-name';corner.textContent='受试者';head.append(corner);
+      data.dates.forEach(day=>{const th=document.createElement('th');th.textContent=matrixShortDate(day);th.title=day;head.append(th)});
+      const rows=byId('completenessRows');rows.textContent='';
+      const marks={hasSession:'睡',hasPreSleep:'前',hasPostWake:'后'};
+      data.participants.forEach(participant=>{
+        const row=document.createElement('tr');
+        const name=document.createElement('td');name.className='matrix-name';name.textContent=participant.username;row.append(name);
+        participant.cells.forEach(cell=>{
+          const td=document.createElement('td');
+          const box=document.createElement('div');
+          // 「设备当晚有记录但归属给了别人」用红色标出：那不是数据缺失，是归属需要人工核对。
+          box.className='cell '+(cell.mismatch?'cell-attention':'cell-'+cell.status);
+          box.textContent=Object.keys(marks).map(key=>cell[key]?marks[key]:'·').join('');
+          const problems=[];
+          if(cell.mismatch)problems.push('当晚设备有记录，但归属给了：'+(cell.nightOwners||'未知'));
+          if(!cell.hasSession&&!cell.mismatch)problems.push('无睡眠记录');
+          if(!cell.hasPreSleep)problems.push('睡前问卷未填');
+          if(!cell.hasPostWake)problems.push('醒后问卷未填');
+          const detail=[participant.username+' · '+cell.date,
+            cell.hasSession?'本人睡眠记录 '+cell.sessionCount+' 段，累计 '+(Math.round(cell.monitoringSeconds/60))+' 分钟':'本人名下无睡眠记录',
+            cell.nightSessionCount?'当晚设备共 '+cell.nightSessionCount+' 段记录（归属：'+(cell.nightOwners||'未归属')+'）':'当晚设备无记录',
+            cell.hasPreSleep?'睡前问卷已填':'睡前问卷未填',
+            cell.hasPostWake?'醒后问卷已填':'醒后问卷未填'].join('\n');
+          box.title=(problems.length?'⚠ '+problems.join('\n⚠ ')+'\n':'当晚数据完整\n')+detail;
+          td.append(box);row.append(td);
+        });
+        rows.append(row);
+      });
+      if(!data.participants.length){
+        const row=document.createElement('tr'),cell=document.createElement('td');
+        cell.colSpan=data.dates.length+1;cell.className='empty';cell.textContent='暂无启用中的普通用户账号。';
+        row.append(cell);rows.append(row);
+      }
+      const summary=byId('completenessSummary');summary.textContent='';
+      const nightCount=data.participants.length*data.dates.length;
+      [['完整',data.totals.complete,'#137342'],['部分',data.totals.partial,'#8d5521'],['缺失',data.totals.missing,'#657085'],['待核对归属',data.totals.mismatch||0,'#a32626']].forEach(([label,value,color])=>{
+        const block=document.createElement('div'),caption=document.createElement('span');
+        caption.className='muted';caption.textContent=label+'（共 '+nightCount+' 个人夜）';
+        const number=document.createElement('b');number.textContent=value;number.style.color=color;
+        block.append(caption,number);summary.append(block);
+      });
+    }
     async function loadDevices(){const data=await api('/api/v1/devices');const list=byId('deviceList');list.textContent='';setText('deviceCount',data.items.length+' 台');if(!data.items.length){list.innerHTML='<p class="empty">暂无已登记设备。</p>';return}data.items.forEach(device=>{const button=document.createElement('button');button.className='device'+(selectedDevice&&selectedDevice.deviceId===device.deviceId?' selected':'');const status=document.createElement('span');status.innerHTML='<i class="status '+(device.lastReceivedAt?'ok':'off')+'"></i>'+(device.isActive?'已启用':'已停用')+' · '+formatTime(device.lastReceivedAt);const title=document.createElement('b');title.textContent=device.displayName+' ('+device.deviceId+')';button.append(title,status);button.onclick=()=>loadDetail(device);list.append(button)})}
     function datetimeLocalChina(value){const date=new Date(value),fields={};new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date).forEach(part=>{fields[part.type]=part.value});return fields.year+'-'+fields.month+'-'+fields.day+'T'+fields.hour+':'+fields.minute+':'+fields.second}
     function formatChartTime(value){return new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(value)).replace(/\//g,'-')}
@@ -188,7 +286,11 @@
     byId('questionnaireDate').value=chinaDateValue();
     byId('batchExportStart').value=chinaDateValue();
     byId('batchExportEnd').value=chinaDateValue();
-    function selectAdminPanel(name){document.querySelectorAll('[data-admin-panel]').forEach(button=>button.classList.toggle('active',button.dataset.adminPanel===name));document.querySelectorAll('.admin-panel').forEach(panel=>panel.classList.toggle('active',panel.id==='adminPanel-'+name));if(name==='devices'&&selectedDevice)requestAnimationFrame(renderTelemetryCharts);}
+    // 默认看最近 14 个睡眠夜：够看出进度趋势，又不会把矩阵横向撑得太宽。
+    function shiftChinaDate(days){const now=new Date(Date.now()+days*86400000),fields={};new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now).forEach(part=>{fields[part.type]=part.value});return fields.year+'-'+fields.month+'-'+fields.day}
+    byId('completenessStart').value=shiftChinaDate(-13);
+    byId('completenessEnd').value=chinaDateValue();
+    function selectAdminPanel(name){document.querySelectorAll('[data-admin-panel]').forEach(button=>button.classList.toggle('active',button.dataset.adminPanel===name));document.querySelectorAll('.admin-panel').forEach(panel=>panel.classList.toggle('active',panel.id==='adminPanel-'+name));if(name==='devices'&&selectedDevice)requestAnimationFrame(renderTelemetryCharts);if(name==='completeness')loadCompleteness().catch(error=>setText('dashboardError',error.message));}
     document.querySelectorAll('[data-admin-panel]').forEach(button=>button.onclick=()=>selectAdminPanel(button.dataset.adminPanel));
     ['heartRateChart','respiratoryRateChart','sleepStageChart','expandedChart'].forEach(id=>bindChartCanvas(byId(id)));
     document.querySelectorAll('[data-expand-chart]').forEach(button=>button.onclick=()=>openChartModal(button.dataset.expandChart,button));
@@ -200,6 +302,7 @@
     byId('loginForm').onsubmit=async event=>{event.preventDefault();setText('loginError','');try{const data=await api('/api/v1/auth/login',{method:'POST',headers:{},body:JSON.stringify({username:byId('username').value.trim(),password:byId('password').value})});if(data.role!=='admin')throw new Error('该账号不是管理员账号');token=data.accessToken;localStorage.setItem(key,token);showDashboard(data);await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()])}catch(error){setText('loginError',error.message)}};
     byId('refresh').onclick=async()=>{try{await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()]);if(selectedDevice)await loadDetail(selectedDevice)}catch(error){setText('dashboardError',error.message)}};
     byId('refreshQuestionnaires').onclick=async()=>{try{setText('dashboardError','');await loadQuestionnaires()}catch(error){setText('dashboardError',error.message)}};
+    byId('refreshCompleteness').onclick=async()=>{try{setText('dashboardError','');await loadCompleteness()}catch(error){setText('dashboardError',error.message)}};
     byId('exportQuestionnaires').onclick=async()=>{try{await exportBatchQuestionnaires()}catch(error){setText('dashboardError',error.message)}};
     byId('exportSleep').onclick=async()=>{try{await exportBatchSleep()}catch(error){setText('dashboardError',error.message)}};
     byId('loadCharts').onclick=async()=>{try{setText('dashboardError','');await loadTelemetryRange()}catch(error){setText('dashboardError',error.message)}};

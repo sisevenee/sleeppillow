@@ -138,3 +138,65 @@ The MySQL database is the server's canonical store. To create a readable CSV
 for one device and one China-local day, run `export_telemetry.py`. It writes a
 UTF-8-with-BOM file beneath `data/exports/`, using the SD CSV's ten data fields
 plus `DeviceId` and `ServerReceivedAt` for comparison.
+
+## Session attribution (`sleep_sessions.user_id`)
+
+`sleep_sessions` originally recorded only `device_id`. Because
+`user_current_devices` keeps a single "current device" row per account and a
+device may be reassigned at any time, a session recorded before a handover
+could not be traced back to the participant who actually slept on it.
+
+`user_id` now records who was using the device when the session was opened:
+
+- The API stamps it once, at session creation, from `user_current_devices`.
+  It is never rewritten, so a later handover cannot change who an earlier
+  night belonged to.
+- It is nullable on purpose. An ESP32 can upload before anyone logs in or
+  selects a device, and a bare NULL must not make the data disappear.
+- Read paths resolve with `COALESCE(s.user_id, ucd.user_id)`, so rows written
+  before the column existed still appear under the device's current owner.
+- The foreign key is `ON DELETE SET NULL`: removing a participant must not
+  cascade-delete recorded nights.
+
+### Applying the change to an existing database
+
+`migrate_sessions_user_id.sql` is structure-only, touches no business data, and
+is safe to re-run (each step is guarded by an `information_schema` check):
+
+```bash
+sudo bash -c 'set -a; . secrets/pillow-api-mysql.env; set +a; \
+  mysql -h "$PILLOW_MYSQL_HOST" -u "$PILLOW_MYSQL_USER" -p"$PILLOW_MYSQL_PASSWORD" \
+  "$PILLOW_MYSQL_DATABASE"' < backend/mysql/migrate_sessions_user_id.sql
+```
+
+Then attribute the historical rows. `backfill_session_user_id.py` only fills
+rows where `user_id IS NULL`, never overwrites an existing value, and is
+therefore safe to re-run. It prefers `sleep_manual_markers`, the only source
+that survives a device handover, and falls back to the device's current owner:
+
+```bash
+sudo bash -c 'set -a; . secrets/pillow-api-mysql.env; set +a; \
+  python3 backend/mysql/backfill_session_user_id.py --dry-run'
+sudo bash -c 'set -a; . secrets/pillow-api-mysql.env; set +a; \
+  python3 backend/mysql/backfill_session_user_id.py --apply'
+```
+
+The dry run reports how many sessions are resolvable by marker versus by the
+current owner, and how many would stay NULL, so the split is reviewable before
+anything is written. Take a backup first if the run is not a dry run.
+
+## Data completeness matrix
+
+`GET /api/v1/admin/completeness?start=YYYY-MM-DD&end=YYYY-MM-DD` returns the
+participant x sleep-night grid behind the admin dashboard's 数据完整度 tab.
+Rows are active ordinary participants; columns are China-local sleep-night
+dates, so a 22:00--08:00 recording appears under the date its monitoring ended.
+The range is capped at 62 days because one column is rendered per day.
+
+Each cell carries three independent facts — a sleep session, the bedtime form,
+and the next-morning form — and is labelled `complete`, `partial`, or
+`missing`. A fourth state, surfaced as `mismatch`, flags a night where the
+device did record data but the session is credited to a different participant
+while this participant submitted a questionnaire. That case is not a missing
+data problem and should be resolved by hand rather than read as a hardware
+failure.

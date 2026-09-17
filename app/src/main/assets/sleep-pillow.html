@@ -295,15 +295,15 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
   <!-- 首页主卡片：设备状态 + 枕头示意图 + 开始/结束睡眠按钮。 -->
   <section class="card hero">
     <!-- id 以 home 开头的元素会被 setDeviceState() 和 renderSleepSessionState() 动态改文案/样式。 -->
-    <span class="status warn" id="homeDeviceStatus">电量偏低</span>
+    <span class="status" id="homeDeviceStatus">等待设备</span>
     <div class="pillow"></div>
-    <div style="text-align:center"><h2 id="homeStatusTitle">设备电量偏低</h2><p class="muted small" id="homeStatusDesc">建议先给睡眠枕充电，避免整晚记录过程中断。</p>
+    <div style="text-align:center"><h2 id="homeStatusTitle">请先连接睡眠枕</h2><p class="muted small" id="homeStatusDesc">连接睡眠枕后，才能确认设备状态并开始记录。</p>
       <!-- 四个小状态块：蓝牙、电量、Wi-Fi、采集状态。 -->
       <div class="checks">
-        <div class="check" id="homeBluetoothCheck"><b>蓝牙正常</b>实时控制可用</div>
-        <div class="check warn" id="homeBatteryCheck"><b>电量 18%</b>建议先充电</div>
+        <div class="check bad" id="homeBluetoothCheck"><b>蓝牙未连接</b>无法确认设备实时状态</div>
+        <div class="check" id="homeBatteryCheck"><b>电量未知</b>连接后确认</div>
         <div class="check" id="homeWifiCheck"><b>Wi‑Fi 未连接</b>尚未完成配置</div>
-        <div class="check" id="homeSignalCheck"><b>信号良好</b>采集稳定</div>
+        <div class="check" id="homeSignalCheck"><b>信号未知</b>连接后确认</div>
       </div>
       <!-- “准备入睡”只记录主观时间和问卷；设备记录由 ESP32 上电后的数据自动开始。 -->
       <button class="primary" id="startSleep">准备入睡</button>
@@ -314,9 +314,9 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
     </div>
   </section>
 
-  <!-- 首页异常提醒区：根据演示设备状态显示电量、Wi-Fi 或传感器提醒。 -->
+  <!-- 首页异常提醒区：只在确实能判定异常时出现；电量与信号没有真实来源，因此不再据此报警。 -->
   <section class="alert-stack">
-    <div class="alert warn" id="homeBatteryAlert"><span>!</span><div><b>设备电量偏低</b>低于 20% 时建议先充电，避免整晚记录中断。<button data-open="device">查看设备状态</button></div></div>
+    <div class="alert warn" id="homeBatteryAlert" hidden><span>!</span><div><b>设备电量偏低</b>低于 20% 时建议先充电，避免整晚记录中断。<button data-open="device">查看设备状态</button></div></div>
     <div class="alert bad" id="homeWifiAlert" hidden><span>!</span><div><b>Wi‑Fi 连接失败</b>本地数据已保存，连接 Wi‑Fi 后会自动补传。<button data-open="wifi">重新连接</button></div></div>
     <div class="alert warn" id="homeSignalAlert" hidden><span>!</span><div><b>传感器信号偏弱</b>建议调整枕头位置或躺姿，确保传感器区域靠近颈肩。<button data-open="onboarding">重新校准</button></div></div>
   </section>
@@ -564,10 +564,10 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
 <section class="view" id="device">
   <header class="header"><div><p class="muted small">设备连接与管理</p><h1>设备</h1></div><button class="iconbtn" data-open="pairing">＋</button></header>
   <!-- 设备主信息卡片：电量/信号等文案由 setDeviceState() 更新。 -->
-  <section class="card"><div class="device-top"><div class="pillow"></div><div class="grow"><span class="status warn" id="deviceMainStatus">电量偏低</span><h2 id="connectedDeviceName" style="margin-top:10px">SleepPillow-01</h2><p class="muted small" id="connectedDeviceAddress">SN: SP2600812</p><div style="margin-top:8px"><span class="value-pill" id="deviceBatteryPill">电量 18%</span> <span class="value-pill" id="deviceSignalPill">信号 86%</span></div></div></div></section>
-  <!-- 设备异常提醒：电量低、Wi-Fi失败、未绑定等都会复用这块。 -->
+  <section class="card"><div class="device-top"><div class="pillow"></div><div class="grow"><span class="status" id="deviceMainStatus">等待连接</span><h2 id="connectedDeviceName" style="margin-top:10px">SleepPillow-01</h2><p class="muted small" id="connectedDeviceAddress">SN: SP2600812</p><div style="margin-top:8px"><span class="value-pill" id="deviceBatteryPill">电量未知</span> <span class="value-pill" id="deviceSignalPill">信号未知</span></div></div></div></section>
+  <!-- 设备异常提醒：Wi-Fi 失败、未绑定等都会复用这块；电量无数据来源，不再据此报警。 -->
   <section class="alert-stack">
-    <div class="alert warn" id="deviceAlert"><span>!</span><div><b id="deviceAlertTitle">电量不足</b><span id="deviceAlertText">建议充电后再开始整晚监测。</span></div></div>
+    <div class="alert warn" id="deviceAlert"><span>!</span><div><b id="deviceAlertTitle">等待连接</b><span id="deviceAlertText">连接睡眠枕后可确认设备状态。</span></div></div>
   </section>
   <div class="section-title"><h2>连接状态</h2></div>
   <!-- 连接状态列表：蓝牙、Wi-Fi、固件、同步状态。 -->
@@ -581,7 +581,7 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
   <!-- 模块状态：第一版强调“超声由硬件开关控制”。 -->
   <section class="card">
     <div class="row"><div class="ico purple">≈</div><div class="grow"><b>超声模块</b><small>硬件开关控制 · 固定 30 分钟</small></div><span class="value-pill">第一版</span></div>
-    <div class="row"><div class="ico cyan">⌁</div><div class="grow"><b>传感器区域</b><small id="sensorText">接触良好，可以稳定采集</small></div><span class="status" id="sensorStatus">良好</span></div>
+    <div class="row"><div class="ico cyan">⌁</div><div class="grow"><b>传感器区域</b><small id="sensorText">设备可以稳定采集</small></div><span class="status" id="sensorStatus">良好</span></div>
   </section>
   <div class="section-title"><h2>设备维护与设置</h2></div>
   <!-- 维护操作：有风险的操作通过 data-confirm 弹确认框。 -->
@@ -813,15 +813,15 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
     <div class="row"><div class="grow"><b>自动同步</b><small>连接Wi‑Fi后上传睡眠记录</small></div><span>开启</span></div>
     <div class="row"><div class="grow"><b>隐私与权限</b></div><span>›</span></div>
   </section>
-  <div class="section-title"><h2>演示/调试</h2></div>
-  <!-- 演示/调试按钮：只用于切换原型状态，不代表真实硬件上报。 -->
+  <div class="section-title"><h2>查看其他状态</h2></div>
+  <!-- 只用于预览 Wi-Fi 失败、摆放待确认和未绑定这三种页面表现；电量与信号没有真实数据来源。 -->
   <section class="card">
-    <p class="muted small">这些按钮只用于原型演示，后续接入真实睡眠枕后会由设备自动上报状态。</p>
+    <p class="muted small">以下按钮只切换页面展示状态，用于预览 Wi‑Fi 失败、摆放待确认和未绑定时的界面。</p>
     <div class="grid2">
-      <button class="secondary" data-device-state="lowBattery">电量不足</button>
-      <button class="secondary" data-device-state="wifiFail">Wi‑Fi失败</button>
-      <button class="secondary" data-device-state="weakSignal">信号偏弱</button>
       <button class="secondary" data-device-state="normal">恢复正常</button>
+      <button class="secondary" data-device-state="wifiFail">Wi‑Fi失败</button>
+      <button class="secondary" data-device-state="weakSignal">摆放待确认</button>
+      <button class="secondary" data-device-state="unbound">设备未绑定</button>
     </div>
   </section>
 </section>
@@ -888,7 +888,7 @@ const mainViews=new Set(['home','sleep','device','profile']);
 // 页面运行时状态：
 // current/stack 控制返回栈；deviceState 是演示设备状态；
 // stim* 是超声助眠 30 分钟计时；sleep* 是本次睡眠记录计时。
-let current='login', stack=[], toastTimer, confirmAction=null, confirmCancelAction=null, deviceState='lowBattery', stimInterval=null, sleepInterval=null, wifiStatusTimer=null, stimRemaining=1800, stimEndAt=Number(localStorage.getItem('sleep-pillow-stim-end')||0), stimState=localStorage.getItem('sleep-pillow-stim-state')||'idle', sleepSessionActive=localStorage.getItem('sleep-pillow-session-active')==='1', sleepStartedAt=Number(localStorage.getItem('sleep-pillow-session-start')||0), deviceRecordingActive=false, deviceRecordingStartedAt=0, deviceRecordingLastSampleAt=0, connectedBleDevice=null, pendingBleDevice=null, wifiStateVerifiedForCurrentBleSession=false;
+let current='login', stack=[], toastTimer, confirmAction=null, confirmCancelAction=null, deviceState='normal', stimInterval=null, sleepInterval=null, wifiStatusTimer=null, stimRemaining=1800, stimEndAt=Number(localStorage.getItem('sleep-pillow-stim-end')||0), stimState=localStorage.getItem('sleep-pillow-stim-state')||'idle', sleepSessionActive=localStorage.getItem('sleep-pillow-session-active')==='1', sleepStartedAt=Number(localStorage.getItem('sleep-pillow-session-start')||0), deviceRecordingActive=false, deviceRecordingStartedAt=0, deviceRecordingLastSampleAt=0, connectedBleDevice=null, pendingBleDevice=null, wifiStateVerifiedForCurrentBleSession=false;
 const discoveredDevices=new Map();
 // App 只保存最后一次配网结果和 SSID，用于重开页面后展示；Wi-Fi 密码绝不保存到 App。
 const savedWifiState=localStorage.getItem('sleep-pillow-wifi-state')||'idle';
@@ -1843,10 +1843,14 @@ function endSleepSession(){
  setTimeout(()=>{open('report',true);showWakeQuestionnairePrompt()},500)
 }
 
-// 切换设备演示状态。第一版没有真实硬件数据，所以用这里模拟：
-// normal、lowBattery、wifiFail、weakSignal、unbound。
+// 设备状态渲染。
+//
+// 重要：固件没有电池检测引脚，服务器 telemetry 表也没有电量字段，因此 App 无法得到真实电量。
+// 信号强度同理（BLE RSSI 只在扫描时存在，不代表传感器接触质量）。
+// 所以这里一律显示“未知”，不再编造具体百分比——正式实验里假数字会被误当成真实设备状态。
+// 能真实判定的只有蓝牙连接、Wi‑Fi 联网结果和是否正在采集数据，这三项照常显示。
 function setDeviceState(type){
- if(!['lowBattery','wifiFail','weakSignal','normal','unbound'].includes(type))type='lowBattery';
+ if(!['lowBattery','wifiFail','weakSignal','normal','unbound'].includes(type))type='normal';
  deviceState=type;
  localStorage.setItem('sleep-pillow-device-state',type);
  document.querySelectorAll('[data-device-state]').forEach(b=>b.classList.toggle('active',b.dataset.deviceState===type));
@@ -1858,37 +1862,40 @@ function setDeviceState(type){
  const batteryAlert=byId('homeBatteryAlert'), wifiAlert=byId('homeWifiAlert'), signalAlert=byId('homeSignalAlert');
  const setCheck=(el,state,label,desc)=>{el.className='check'+(state?' '+state:'');el.innerHTML='<b>'+label+'</b>'+desc};
  const setHomeAlerts=(battery,wifiFail,signal)=>{batteryAlert.hidden=!battery;wifiAlert.hidden=!wifiFail;signalAlert.hidden=!signal};
+ // 电量与信号没有数据来源，任何状态下都保持“未知”，也不触发对应提醒。
+ batteryPill.textContent='电量未知';signalPill.textContent='信号未知';
  alert.className='alert warn';main.className='status warn';sensor.className='status warn';homeStatus.className='status warn';
  if(type==='normal'){
-  alert.className='alert';title.textContent='设备正常';text.textContent='设备状态正常，今晚可以开始记录。';main.className='status';main.textContent='已连接';
-  batteryPill.textContent='电量 86%';signalPill.textContent='信号 92%';sensor.className='status';sensor.textContent='良好';sensorText.textContent='接触良好，可以稳定采集';
-  homeStatus.className='status';homeStatus.textContent='睡眠枕已连接';homeTitle.textContent='设备状态正常';homeDesc.textContent='蓝牙、Wi‑Fi和传感器状态良好，今晚可以直接开始记录。';
-  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量 86%','今晚记录充足');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'','信号良好','采集稳定');
+  alert.className='alert';title.textContent='设备正常';text.textContent='蓝牙已连接，设备可以开始记录。';main.className='status';main.textContent='已连接';
+  sensor.className='status';sensor.textContent='良好';sensorText.textContent='设备可以稳定采集';
+  homeStatus.className='status';homeStatus.textContent='睡眠枕已连接';homeTitle.textContent='设备状态正常';homeDesc.textContent='蓝牙已连接，今晚可以直接开始记录。';
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量未知','设备未提供电量数据');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'','信号未知','设备未提供信号数据');
   setHomeAlerts(false,false,false);
  }else if(type==='wifiFail'){
   alert.className='alert bad';title.textContent='Wi‑Fi连接失败';text.textContent='Wi‑Fi 连接失败，本地数据会先保存在设备中。';main.className='status bad';main.textContent='需处理';
-  batteryPill.textContent='电量 63%';signalPill.textContent='信号 86%';wifi.textContent='连接失败 ›';wifi.className='state-text bad';sensor.className='status';sensor.textContent='良好';sensorText.textContent='接触良好，可以稳定采集';
+  wifi.textContent='连接失败 ›';wifi.className='state-text bad';sensor.className='status';sensor.textContent='良好';sensorText.textContent='设备可以稳定采集';
   homeStatus.className='status bad';homeStatus.textContent='Wi‑Fi 需处理';homeTitle.textContent='Wi‑Fi 连接失败';homeDesc.textContent='睡眠枕仍可本地记录数据，联网恢复后会自动补传。';
-  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量 63%','可继续监测');setCheck(homeWifi,'bad','Wi‑Fi 失败','等待重新连接');setCheck(homeSignal,'','信号良好','采集稳定');
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量未知','设备未提供电量数据');setCheck(homeWifi,'bad','Wi‑Fi 失败','等待重新连接');setCheck(homeSignal,'','信号未知','设备未提供信号数据');
   setHomeAlerts(false,true,false);
  }else if(type==='weakSignal'){
-  title.textContent='信号偏弱';text.textContent='传感器信号偏弱，请调整枕头位置或躺姿。';main.textContent='信号一般';
-  batteryPill.textContent='电量 64%';signalPill.textContent='信号 48%';sensor.textContent='偏弱';sensorText.textContent='建议靠近颈肩区域，避免枕套过厚';
-  homeStatus.className='status warn';homeStatus.textContent='信号偏弱';homeTitle.textContent='传感器信号偏弱';homeDesc.textContent='建议调整睡眠枕位置，保证传感器区域靠近颈肩。';
-  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量 64%','可继续监测');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'warn','信号 48%','建议重新校准');
+  title.textContent='摆放需要调整';text.textContent='当前摆放可能影响采集质量，建议重新调整枕头位置。';main.textContent='需确认';
+  sensor.textContent='待确认';sensorText.textContent='建议靠近颈肩区域，避免枕套过厚';
+  homeStatus.className='status warn';homeStatus.textContent='摆放待确认';homeTitle.textContent='建议重新调整摆放';homeDesc.textContent='请调整睡眠枕位置，保证传感器区域靠近颈肩。';
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量未知','设备未提供电量数据');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'warn','信号未知','请在引导页重新检测');
   setHomeAlerts(false,false,true);
  }else if(type==='unbound'){
   alert.className='alert bad';title.textContent='设备未绑定';text.textContent='当前账号未绑定睡眠枕，需要重新添加设备后才能开始记录。';main.className='status bad';main.textContent='未绑定';
-  batteryPill.textContent='电量 --';signalPill.textContent='信号 --';wifi.textContent='未配置 ›';wifi.className='state-text bad';sensor.className='status bad';sensor.textContent='未连接';sensorText.textContent='绑定设备后才能检测传感器状态';
+  wifi.textContent='未配置 ›';wifi.className='state-text bad';sensor.className='status bad';sensor.textContent='未连接';sensorText.textContent='绑定设备后才能检测传感器状态';
   homeStatus.className='status bad';homeStatus.textContent='设备未绑定';homeTitle.textContent='未绑定睡眠枕';homeDesc.textContent='请先添加并校准睡眠枕，然后再开始睡眠记录。';
-  setCheck(byId('homeBluetoothCheck'),'bad','蓝牙未连','需要重新绑定');setCheck(homeBattery,'bad','电量 --','暂无设备数据');setCheck(homeWifi,'bad','Wi‑Fi 未配置','绑定后设置');setCheck(homeSignal,'bad','信号 --','暂无采集数据');
+  setCheck(byId('homeBluetoothCheck'),'bad','蓝牙未连','需要重新绑定');setCheck(homeBattery,'bad','电量未知','暂无设备数据');setCheck(homeWifi,'bad','Wi‑Fi 未配置','绑定后设置');setCheck(homeSignal,'bad','信号未知','暂无采集数据');
   setHomeAlerts(false,false,false);
  }else{
-  title.textContent='电量不足';text.textContent='电量低于 20%，建议先充电，避免整晚记录中断。';main.textContent='电量偏低';
-  batteryPill.textContent='电量 18%';signalPill.textContent='信号 86%';sensor.className='status';sensor.textContent='良好';sensorText.textContent='接触良好，可以稳定采集';
-  homeStatus.className='status warn';homeStatus.textContent='电量偏低';homeTitle.textContent='设备电量偏低';homeDesc.textContent='建议先给睡眠枕充电，避免整晚记录过程中断。';
-  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'warn','电量 18%','建议先充电');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'','信号良好','采集稳定');
-  setHomeAlerts(true,false,false);
+  // 保留旧存档里的 lowBattery 状态，但不再显示编造的电量，也不再弹出电量告警。
+  title.textContent='设备已连接';text.textContent='设备未提供电量数据，无法确认剩余电量。';main.textContent='已连接';
+  sensor.className='status';sensor.textContent='良好';sensorText.textContent='设备可以稳定采集';
+  homeStatus.className='status';homeStatus.textContent='睡眠枕已连接';homeTitle.textContent='设备状态正常';homeDesc.textContent='蓝牙已连接，今晚可以直接开始记录。';
+  setCheck(byId('homeBluetoothCheck'),'','蓝牙正常','实时控制可用');setCheck(homeBattery,'','电量未知','设备未提供电量数据');setCheck(homeWifi,'','Wi‑Fi 未连接','尚未完成配置');setCheck(homeSignal,'','信号未知','设备未提供信号数据');
+  setHomeAlerts(false,false,false);
  }
  applyWifiConnectionState();
  renderSleepSessionState()
@@ -1918,7 +1925,7 @@ function showStartSleepConfirmation(){
  const needsDevice=deviceState==='unbound';
  showConfirm({
   title:'准备入睡？',
-  body:deviceState==='lowBattery'?'准备入睡后设备仍会按上电状态记录。当前电量偏低，建议充电后再开始。':deviceState==='wifiFail'?'设备会先把数据保存在睡眠枕本地，Wi-Fi恢复后再同步。':deviceState==='weakSignal'?'当前传感器信号偏弱，建议重新调整枕头位置后再继续。':needsDevice?'当前未绑定睡眠枕，请先添加设备后再准备入睡。':'将记录你的准备入睡时间并检查睡前问卷；设备记录由 ESP32 上电后的数据自动开始。',
+  body:deviceState==='wifiFail'?'设备会先把数据保存在睡眠枕本地，Wi-Fi恢复后再同步。':deviceState==='weakSignal'?'当前摆放可能影响采集质量，建议重新调整枕头位置后再继续。':needsDevice?'当前未绑定睡眠枕，请先添加设备后再准备入睡。':'将记录你的准备入睡时间并检查睡前问卷；设备记录由 ESP32 上电后的数据自动开始。',
   confirmText:needsDevice?'去添加设备':'确认准备入睡',
   onConfirm:()=>needsDevice?open('pairing'):startSleepSession()
  })
@@ -1969,9 +1976,9 @@ byId('wifiForm').addEventListener('submit',e=>{
 document.querySelectorAll('[data-confirm]').forEach(b=>b.addEventListener('click',()=>{
  if(b.dataset.confirm==='firmware')showConfirm({
   title:'确认升级固件？',
-  body:'升级前请保持电量高于 50%，并确保 Wi‑Fi 稳定。升级过程中不要断电或解除绑定。',
+  body:'升级前请确保 Wi‑Fi 稳定。升级过程中不要断电或解除绑定。',
   confirmText:'开始检查',
-  onConfirm:()=>{toast('正在检查电量与网络');setTimeout(()=>toast('演示：电量偏低，暂不升级'),700)}
+  onConfirm:()=>{toast('正在检查网络');setTimeout(()=>toast('演示：固件升级流程尚未接入'),700)}
  });
  if(b.dataset.confirm==='unbind')showConfirm({
  title:'解除当前设备绑定？',
@@ -1983,7 +1990,7 @@ document.querySelectorAll('[data-confirm]').forEach(b=>b.addEventListener('click
 }));
 
 // 设置页底部“演示/调试”按钮，用来模拟不同设备状态。
-document.querySelectorAll('[data-device-state]').forEach(b=>b.addEventListener('click',()=>{setDeviceState(b.dataset.deviceState);toast('已切换状态演示')}));
+document.querySelectorAll('[data-device-state]').forEach(b=>b.addEventListener('click',()=>{setDeviceState(b.dataset.deviceState);toast('已切换页面展示状态')}));
 
 // 超声助眠计时和通用确认弹窗事件。
 byId('hardwareStimStart').addEventListener('click',startStimTimer);
@@ -2295,7 +2302,7 @@ byId('saveGoals').addEventListener('click',()=>toast('已保存目标：'+byId('
 
 // 页面启动时恢复上次保存的状态。
 applyTheme(localStorage.getItem('sleep-pillow-theme')||'night');
-setDeviceState(localStorage.getItem('sleep-pillow-device-state')||'lowBattery');
+setDeviceState(localStorage.getItem('sleep-pillow-device-state')||'normal');
 // 旧版本曾把“上次连接过”误当作“当前仍连接”。迁移时只保留绑定关系，
 // 当前 GATT 状态必须等待 Android 的 ready/disconnected 回调。
 try{

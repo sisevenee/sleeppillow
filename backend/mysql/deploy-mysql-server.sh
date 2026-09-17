@@ -44,6 +44,11 @@ for _ in 1 2 3 4 5; do
 done
 mysqladmin ping --silent
 
+app_read_token="$(sed -n 's/^PILLOW_APP_READ_TOKEN=//p' "$project_root/secrets/pillow-api.env" | head -1)"
+if [[ -z "$app_read_token" ]]; then
+  echo "Could not read existing App token" >&2
+  exit 1
+fi
 mysql_password="$(openssl rand -hex 32)"
 
 mysql <<SQL
@@ -57,6 +62,7 @@ mysql < "$project_root/backend/mysql/schema.sql"
 
 umask 077
 cat > "$api_env" <<EOF
+PILLOW_APP_READ_TOKEN=$app_read_token
 PILLOW_MYSQL_HOST=127.0.0.1
 PILLOW_MYSQL_PORT=3306
 PILLOW_MYSQL_USER=pillow_api

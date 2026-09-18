@@ -446,6 +446,26 @@ def answer_value(answers: dict[str, Any], key: str) -> str:
     return str(answer.get("value", "")) if isinstance(answer, dict) else ""
 
 
+def resolve_questionnaire_response_date(
+    questionnaire_type: str, requested_date: date, answers: dict[str, Any],
+) -> date:
+    """Use the wake diary's stated experiment date as its canonical sleep-night key.
+
+    Older APKs submitted the China date on which the morning form was filled, even though the
+    form itself correctly contained the previous night's experiment date. Normalizing at the
+    API boundary keeps those clients from splitting one night across two calendar dates.
+    """
+    if questionnaire_type != "post_wake":
+        return requested_date
+    experiment_date = answer_value(answers, "experiment_date").strip()
+    if not experiment_date:
+        return requested_date
+    try:
+        return parse_questionnaire_date(experiment_date)
+    except ValueError as error:
+        raise ValueError("answers.experiment_date must be YYYY-MM-DD") from error
+
+
 def questionnaire_submission_to_response(row: dict[str, Any], include_answers: bool = False) -> dict[str, Any]:
     response = {
         "id": int(row["id"]),
@@ -840,14 +860,14 @@ def load_completeness_matrix(
         )
         participants = cursor.fetchall()
 
-        # Sessions are grouped by the China-local date on which monitoring ended, matching the
-        # export rule: a 22:00--08:00 recording belongs to the morning date.
+        # A sleep night is keyed by the China-local date on which monitoring started. That is
+        # the bedtime questionnaire's date; the next-morning questionnaire uses the same key.
         # SUM() over a TIMESTAMPDIFF yields a plain integer, unlike a SUM over a DATETIME
         # difference, which the driver hands back as a Decimal of the form HHMMSS.
         cursor.execute(
             """
             SELECT COALESCE(s.user_id, ucd.user_id) AS user_id,
-                   DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR)) AS sleep_night,
+                   DATE(DATE_ADD(s.started_at, INTERVAL 8 HOUR)) AS sleep_night,
                    COUNT(DISTINCT s.id) AS session_count,
                    SUM(TIMESTAMPDIFF(SECOND, s.started_at, COALESCE(s.ended_at, s.last_sample_at))) AS total_seconds
             FROM sleep_sessions s
@@ -855,8 +875,8 @@ def load_completeness_matrix(
             LEFT JOIN user_current_devices ucd ON ucd.device_id = d.id
             WHERE s.last_sample_at IS NOT NULL
               AND COALESCE(s.user_id, ucd.user_id) IS NOT NULL
-              AND DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR))
-                  BETWEEN %s AND %s
+              AND DATE(DATE_ADD(s.started_at, INTERVAL 8 HOUR))
+                   BETWEEN %s AND %s
             GROUP BY user_id, sleep_night
             """,
             (start_day, end_day),
@@ -882,14 +902,14 @@ def load_completeness_matrix(
         # researcher looking for a hardware problem that never happened.
         cursor.execute(
             """
-            SELECT DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR)) AS sleep_night,
+            SELECT DATE(DATE_ADD(s.started_at, INTERVAL 8 HOUR)) AS sleep_night,
                    COUNT(DISTINCT s.id) AS session_count,
                    GROUP_CONCAT(DISTINCT COALESCE(u.username, '未归属') ORDER BY u.username) AS owners
             FROM sleep_sessions s
             LEFT JOIN users u ON u.id = s.user_id
             WHERE s.last_sample_at IS NOT NULL
-              AND DATE(DATE_ADD(COALESCE(s.ended_at, s.last_sample_at), INTERVAL 8 HOUR))
-                  BETWEEN %s AND %s
+              AND DATE(DATE_ADD(s.started_at, INTERVAL 8 HOUR))
+                   BETWEEN %s AND %s
             GROUP BY sleep_night
             """,
             (start_day, end_day),
@@ -1983,6 +2003,11 @@ class PillowApiHandler(BaseHTTPRequestHandler):
             answers = payload.get("answers")
             if not isinstance(answers, dict) or not answers:
                 self.send_json(HTTPStatus.BAD_REQUEST, {"error": "answers must be a non-empty object"})
+                return
+            try:
+                response_date = resolve_questionnaire_response_date(questionnaire_type, response_date, answers)
+            except ValueError as error:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
             try:
                 answers_json = json.dumps(answers, ensure_ascii=False, separators=(",", ":"))

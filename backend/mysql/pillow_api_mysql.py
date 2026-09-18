@@ -1380,8 +1380,9 @@ class PillowApiHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/api/v1/me/questionnaires":
             # The App needs only completion state, not the answers it already submitted.
-            # A sleep diary uses its bedtime date: the next-morning form therefore reads the
-            # previous China date while PSQI remains one response per experimental phase.
+            # One sleep night = one date key. The bedtime form is filed under the night it
+            # starts, and the next-morning form is filed under that same night, so both rows
+            # carry the same response_date. PSQI stays one response per experimental phase.
             query = parse_qs(parsed.query)
             legacy_date = query.get("date", [china_now().date().isoformat()])[0]
             requested_pre_date = query.get("preDate", [legacy_date])[0]
@@ -1392,22 +1393,28 @@ class PillowApiHandler(BaseHTTPRequestHandler):
             except ValueError:
                 self.send_json(HTTPStatus.BAD_REQUEST, {"error": "preDate and postDate must be YYYY-MM-DD"})
                 return
+            # A caller that sends one date for both halves is already speaking the right
+            # language; only refuse when the two disagree, since a night cannot have two keys.
+            if pre_sleep_date != post_wake_date:
+                self.send_json(
+                    HTTPStatus.BAD_REQUEST,
+                    {"error": "preDate and postDate must be the same sleep night"},
+                )
+                return
             with db_connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
                     """
                     SELECT id, questionnaire_type, response_date, submitted_at, updated_at
                     FROM questionnaire_submissions
                     WHERE user_id = %s
-                      AND ((questionnaire_type = 'pre_sleep' AND response_date = %s)
-                           OR (questionnaire_type = 'post_wake' AND response_date = %s)
+                      AND ((questionnaire_type IN ('pre_sleep', 'post_wake') AND response_date = %s)
                            OR questionnaire_type IN ('psqi_before', 'psqi_after'))
                     ORDER BY submitted_at DESC
                     """,
-                    (user["user_id"], pre_sleep_date, post_wake_date),
+                    (user["user_id"], pre_sleep_date),
                 )
                 rows = cursor.fetchall()
             self.send_json(HTTPStatus.OK, {
-                # responseDate remains for old APKs that sent one date for both daily forms.
                 "responseDate": pre_sleep_date.isoformat(),
                 "preSleepDate": pre_sleep_date.isoformat(),
                 "postWakeDate": post_wake_date.isoformat(),

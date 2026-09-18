@@ -728,7 +728,7 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
   </section>
   <div class="section-title"><h2>每日睡眠日记</h2></div>
   <section class="survey-card">
-    <div class="top"><h2>睡前填写</h2><span class="badge" id="dailyOneBadge">今晚</span></div>
+    <div class="top"><h2>睡前填写</h2><span class="badge" id="dailyOneBadge">待填</span></div>
     <p>每天入睡前填写一次，用于记录睡前状态、压力感受和当晚准备使用睡眠枕的情况。该日期就是本次睡眠夜的归档日期。</p>
     <div class="survey-frequency"><span>每天 1 次</span><span>睡前填写</span><span>睡眠夜开始</span></div>
     <div class="survey-actions" style="grid-template-columns:1fr">
@@ -743,7 +743,7 @@ body.font-large .app{font-size:17px}body.font-large h1{font-size:34px}body.font-
     </div>
   </section>
   <section class="survey-card">
-    <div class="top"><h2>醒后填写</h2><span class="badge" id="dailyTwoBadge">昨夜</span></div>
+    <div class="top"><h2>醒后填写</h2><span class="badge" id="dailyTwoBadge">待填</span></div>
     <p>每天醒来后填写一次，用于记录晨起精神状态和夜间体验。它会和昨晚的睡前问卷归到同一个睡眠夜。</p>
     <div class="survey-frequency"><span>每天 1 次</span><span>醒后填写</span><span>归入昨夜</span></div>
     <div class="survey-actions" style="grid-template-columns:1fr">
@@ -1155,7 +1155,7 @@ function bindSleepShortcuts(root=document){
  root.querySelectorAll('[data-open-assist]').forEach(b=>{if(b.dataset.boundOpenAssist)return;b.dataset.boundOpenAssist='1';b.addEventListener('click',openSleepControl)})
 }
 // 暴露给 Android MainActivity 调用：处理系统返回键和前后台刷新。
-window.SleepPillowPrototype={canGoBack:()=>stack.length>0,back,refreshFromNative};
+window.SleepPillowPrototype={canGoBack:()=>stack.length>0,back,refreshFromNative,onBleEvent,onServerEvent,onNativeEvent};
 
 // 显示确认弹窗。两个按钮都可配置动作，适合“仍然开始 / 去填写”这类选择。
 function showConfirm({title,body,confirmText='确认',cancelText='取消',danger=false,onConfirm,onCancel}){
@@ -1288,9 +1288,34 @@ function chinaDateParts(value){
  return {year:Number(parts.year),month:Number(parts.month),day:Number(parts.day)}
 }
 
+// 仅测试使用：非空时表示「今天」被固定成这一天，用来断言跨自然日的归档行为。
+// 用 var 而不是 let：它要在 chinaDateKey 里被读到，而 var 不会产生暂时性死区，
+// 脚本加载期提前求值也只会读到 undefined，不会把整个日期口径炸成空串。
+var todayOverride=null;
+
+// 中国时区的 YYYY-MM-DD。
+//   传日期字符串 -> 取那一天；
+//   传数字     -> 以「今天」为基准按天数偏移（-1 = 昨晚，-7 = 回填下限），NaN/Infinity 视为非法。
+// 偏移必须走 Date 的日序号运算，不能写 base.day+value —— 那是「日」这个字段加 value，
+// 和「取前一天」的语义无关。
+// 基准日取 todayKey() 而不是 Date.now()：这样 todayOverride 一改，昨天/回填下限全都跟着挪；
+// 否则「今天」和「昨晚」会分别锚在注入值和真实系统时间上，跨午夜场景算出来就是错的。
 function chinaDateKey(value){
- const parts=chinaDateParts(value);return parts?parts.year+'-'+String(parts.month).padStart(2,'0')+'-'+String(parts.day).padStart(2,'0'):''
+ if(typeof value==='number'){
+  if(!Number.isFinite(value))return chinaDateKey();
+  const base=chinaDateParts(todayKey());if(!base)return '';
+  const shifted=new Date(Date.UTC(base.year,base.month-1,base.day));
+  if(!Number.isFinite(shifted.getTime()))return '';
+  shifted.setUTCDate(shifted.getUTCDate()+value);
+  return shifted.getUTCFullYear()+'-'+String(shifted.getUTCMonth()+1).padStart(2,'0')+'-'+String(shifted.getUTCDate()).padStart(2,'0')
+ }
+ // 字符串或 undefined：undefined 表示「取今天」，其余按传入的时刻取值。
+ const parts=chinaDateParts(typeof value==='string'&&value.trim()?value:Date.now());
+ return parts?parts.year+'-'+String(parts.month).padStart(2,'0')+'-'+String(parts.day).padStart(2,'0'):''
 }
+
+// 今天的日期（带测试注入）。
+function todayKey(){return todayOverride||chinaDateKey()}
 
 function reportByDate(reports){
  const mapped=new Map();
@@ -1501,30 +1526,42 @@ function onServerEvent(eventName,payloadJson){
  if(eventName==='server_login_success'){
   byId('loginPassword').value='';
   localStorage.setItem('sleep-pillow-account-name',data.username||'');
+  // 登录后补一次当前睡眠夜的问卷状态，首页两行徽标才有起点。
+  rememberStatusQuery('home');
+  notifyNative('server_questionnaire_status_requested');
   loginSuccess('登录成功');
   return
  }
  if(eventName==='server_questionnaire_status'){
   const items=Array.isArray(data.items)?data.items:[];
-  // 回包带回查询用的睡眠夜：等于今天/昨夜时是首页状态，否则是补填查询的结果。
-  if(data.preSleepDate===todayKey()&&data.postWakeDate===yesterdayKey()){
+  // 首页查的是「今晚」，醒后那份要查「昨晚」，所以回包用两个日期确认身份；
+  // 老接口只回 responseDate，退回它即可。
+  const preDate=data.preSleepDate||data.responseDate||'',postDate=data.postWakeDate||data.responseDate||'';
+  // 只有刚发出去的那次查询自己认领这份回包；认领完立即清空，避免同一份回包被重复使用。
+  const queried=lastStatusQuery;
+  lastStatusQuery={preDate:'',postDate:''};
+  if(isHomeStatusQuery(queried.preDate,queried.postDate)){
    serverQuestionnaireStatus={};
-   items.forEach(item=>{if(item&&item.questionnaireType)serverQuestionnaireStatus[item.questionnaireType]=item})
-  }else{
-   // 用户又改了日期时，先前那次查询的迟到回包必须丢弃，否则会显示成另一个日期的状态。
-   if(backfillQueryState==='pending'&&data.preSleepDate!==pendingBackfillQuery)return;
-   backfillQuestionnaireStatus={};
-   items.forEach(item=>{if(item&&item.questionnaireType)backfillQuestionnaireStatus[item.questionnaireType]=item});
-   if(isValidDateKey(data.preSleepDate)){pendingBackfillQuery=data.preSleepDate;backfillQueryState='done';clearTimeout(backfillQueryTimer)}
+   items.forEach(item=>{if(item&&item.questionnaireType)serverQuestionnaireStatus[item.questionnaireType]=item});
+   updateSurveyBadges();
+   return
   }
-  updateSurveyBadges();
+  // 补填回包只写入补填分桶，不动首页状态；首页状态只由首页查询和提交回调维护。
+  const backfillDate=isValidDateKey(preDate)?preDate:postDate;
+  // 用户又改了日期时，先前那次查询的迟到回包必须丢弃，否则会显示成另一个日期的状态。
+  if(backfillQueryState==='pending'&&backfillDate!==pendingBackfillQuery)return;
+  backfillQuestionnaireStatus={};
+  items.forEach(item=>{if(item&&item.questionnaireType)backfillQuestionnaireStatus[item.questionnaireType]=item});
+  if(isValidDateKey(backfillDate)){pendingBackfillQuery=backfillDate;backfillQueryState='done';clearTimeout(backfillQueryTimer)}
+  refreshBackfillPanelByDate(backfillDate);
   return
  }
  if(eventName==='server_questionnaire_submitted'){
   pendingQuestionnaireSubmission=null;
   const submittedDate=data.responseDate||'';
-  // PSQI 不按日期归档；每日问卷只有回到默认睡眠夜时才算今天的完成状态。
-  const isDefaultNight=data.questionnaireType==='psqi_before'||data.questionnaireType==='psqi_after'?true:submittedDate===defaultResponseDate(data.questionnaireType);
+  // PSQI 不按日期归档；每日问卷回到它应有的归档日期（睡前今晚 / 醒后昨晚）才算当前完成状态。
+  const isDaily=data.questionnaireType==='pre_sleep'||data.questionnaireType==='post_wake';
+  const isDefaultNight=isDaily?submittedDate===expectedResponseDate(data.questionnaireType):true;
   if(data.questionnaireType&&isDefaultNight)serverQuestionnaireStatus[data.questionnaireType]=data;
   else if(data.questionnaireType&&isValidDateKey(submittedDate)){backfillQuestionnaireStatus[data.questionnaireType]=data;pendingBackfillQuery=submittedDate;backfillQueryState='done'}
   updateSurveyBadges();
@@ -1637,7 +1674,7 @@ function onNativeEvent(eventName,payloadJson){
  let data={};try{data=JSON.parse(payloadJson||'{}')}catch(error){}
  if(eventName==='questionnaire_reminder_status'){
   const text='通知：'+(data.notificationsAllowed?'已允许':'未允许')+'；定时：'+(data.exactAlarmsAllowed?'精确':'可能延迟')+'；后台：'+(data.backgroundReminderAllowed?'已解除限制':'可能受限')+'；睡前：'+(data.bedReminder||'--')+'；晨起：'+(data.morningReminder||'--');
-  const completion='；睡前（'+(data.bedQuestionnaireDate||todayKey())+'）'+(data.bedCompletedToday?'已填写':'未填写')+'、醒后（'+(data.morningQuestionnaireDate||yesterdayKey())+'）'+(data.morningCompletedLastNight?'已填写':'未填写');
+  const completion='；睡前（'+(data.bedQuestionnaireDate||currentSleepNightKey())+'）'+(data.bedCompletedToday?'已填写':'未填写')+'、醒后（'+(data.morningQuestionnaireDate||currentSleepNightKey())+'）'+(data.morningCompletedLastNight?'已填写':'未填写');
   byId('reminderStatus').textContent=text+completion+'；下次睡前：'+(data.nextBed||'--')+'；下次晨起：'+(data.nextMorning||'--')+'；上次触发：'+(data.lastDelivery||'尚未触发')+'；定时测试：'+(data.scheduledTest||'--');
   return
  }
@@ -2102,27 +2139,53 @@ byId('sendReminderTest').addEventListener('click',()=>notifyNative('questionnair
 byId('scheduleReminderTest').addEventListener('click',()=>notifyNative('questionnaire_reminder_delayed_test'));
 byId('allowBackgroundReminder').addEventListener('click',()=>notifyNative('questionnaire_background_reminder_requested'));
 
-// 每日睡眠日记始终按中国日期归档：睡前是今晚，醒后属于昨晚同一睡眠夜。
-function chinaDateKey(offsetDays=0){const fields={};const instant=new Date(Date.now()+offsetDays*24*60*60*1000);new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(instant).forEach(part=>{fields[part.type]=part.value});return fields.year+'-'+fields.month+'-'+fields.day}
-function todayKey(){return chinaDateKey()}
-function yesterdayKey(){return chinaDateKey(-1)}
+// 每日睡眠日记按中国自然日归档：一个睡眠夜一个日期。
+// 睡前问卷归「今晚」，次日醒后的问卷归「昨夜」——两份落在同一个日期上，
+// 这个日期就是本次睡眠夜的键（后端 questionnaire_submissions.response_date 也用它）。
+// 不按提交时刻二次推算：受试者 10 点醒来填的醒后问卷，归档日期必须还是他醒来那一天。
+// 睡前问卷归档今晚。
+function currentSleepNightKey(){return todayKey()}
+// 醒后问卷归档昨晚——也就是已经结束的那一个睡眠夜，与昨晚填的睡前问卷同日。
+function resetSleepNightKey(){return chinaDateKey(-1)}
 
 // 补填只允许回溯固定天数：既能救回偶尔忘填的一两晚，又不会把日期误填到实验开始前。
 const QUESTIONNAIRE_BACKFILL_DAYS=7;
 function isValidDateKey(value){return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value.trim())}
-// 睡前问卷归档“今晚”，醒后问卷归档“昨晚”，这是每日睡眠日记的默认睡眠夜。
-function defaultResponseDate(type){return type==='post_wake'?yesterdayKey():todayKey()}
-// 醒后问卷描述的是已经过去的睡眠夜，所以它最早/最晚都只能到昨夜。
-function backfillRange(type){return{min:chinaDateKey(-QUESTIONNAIRE_BACKFILL_DAYS),max:type==='post_wake'?yesterdayKey():todayKey()}}
+// 补填面板的日期区间。上限就是能补到的最新睡眠夜：
+//   睡前——今晚还没睡，可以填今晚；
+//   醒后——昨晚那一觉已经结束了，所以最早能补到昨晚（今天还没睡过，没有今天的醒后问卷）。
+// 两个题型各自的上限由 expectedResponseDate 给出，就是它们默认归属的那个睡眠夜。
+function backfillRange(type){
+ return{min:chinaDateKey(-QUESTIONNAIRE_BACKFILL_DAYS),max:expectedResponseDate(type)||currentSleepNightKey()}
+}
+// 测试专用：把「今天」固定成指定日期，便于断言跨自然日的归档行为；传 null 恢复真实时间。
+// 只影响 todayKey()/currentSleepNightKey()，不碰 Date，页面其余逻辑仍是真实时间。
+window.SleepPillowTestHooks={setTodayOverride:(value)=>{todayOverride=isValidDateKey(value)?value.trim():null}};
 const surveyTypeByKey={'psqi-before':'psqi_before','psqi-after':'psqi_after','daily-one':'pre_sleep','daily-two':'post_wake'};
 let serverQuestionnaireStatus={};let activeQuestionnaireType='';let pendingQuestionnaireSubmission=null;
-// 正在填写的问卷对应的睡眠夜：默认是今晚/昨夜，补填时是用户选中的日期。
+// 正在填写的问卷对应的睡眠夜：默认是当前睡眠夜，补填时是用户选中的日期。
 let activeResponseDate='';
-// 补填查询的提交状态单独存放，避免把补填日期的结果覆盖到首页的今晚/昨夜状态上。
+// 补填查询的提交状态单独存放，避免把补填日期的结果覆盖到首页的睡眠夜状态上。
 let backfillQuestionnaireStatus={};
 let pendingBackfillQuery='';
 let backfillQueryState='idle';
 let backfillQueryTimer=null;
+// 最近一次发出的状态查询。无参请求（登录后、点系统提醒）没有上下文，
+// 只有这里存着它要的是哪一个睡眠夜，回包到达时靠它区分「首页查询」和「补填查询」。
+let lastStatusQuery={preDate:'',postDate:''};
+// 判定一份状态回包是不是首页（当前睡眠夜）查询的答案。
+// 睡前/醒后共用同一个日期键，所以只要两段都等于当前睡眠夜就是首页查询。
+function isHomeStatusQuery(preDate,postDate){
+ const night=homeStatusDate();
+ return preDate===night&&postDate===night
+}
+// 留下一次状态查询要问的那一个睡眠夜。kind='home' 是首页/提醒要的当前睡眠夜；
+// 往日补填是用户自己选的那一天。两者问的日期可能长得一样，所以要分开记。
+function rememberStatusQuery(kind,preDate,postDate){
+ lastStatusQuery=(kind==='backfill')
+  ?{preDate:String(preDate||''),postDate:String(postDate||'')}
+  :{preDate:homeStatusDate(),postDate:homeStatusDate()}
+}
 const backfillPanels={
  pre_sleep:{panel:'preSleepBackfillPanel',date:'preSleepBackfillDate',status:'preSleepBackfillStatus',start:'preSleepBackfillStart',toggle:'preSleepBackfillToggle',label:'睡前'},
  post_wake:{panel:'postWakeBackfillPanel',date:'postWakeBackfillDate',status:'postWakeBackfillStatus',start:'postWakeBackfillStart',toggle:'postWakeBackfillToggle',label:'醒后'}
@@ -2139,7 +2202,7 @@ const questionnaireDefinitions={
 function field(id,label,type='text',options=[],help='',value='',visibleWhen=null,attachmentKey='',required=true){return{id,label,type,options,help,value,visibleWhen,attachmentKey,required}}
 const preSleepQuestions=[
  field('identity','姓名＋学号（非山东大学学生可不填学号）'),field('gender','性别','radio',['男','女']),
- field('experiment_date','实验日期','date',[],'请填写今天的实验日期',todayKey()),field('parameter_adjustment','今天是否为参数调整日（改参数★）？','radio',['是','否']),
+ field('experiment_date','实验日期','date',[],'请填写今天的实验日期',''),field('parameter_adjustment','今天是否为参数调整日（改参数★）？','radio',['是','否']),
  field('parameter_adjustment_photo','请上传拨码开关照片','image',[],'支持 JPG、PNG 或 WebP，单张不超过 10 MB。','',{question:'parameter_adjustment',value:'是'},'parameter_adjustment_photo'),
  field('nap','今天白天，你是否午睡或打盹？','radio',['是','否']),field('nap_detail','今天白天，你午睡或打盹了多少次，总共午睡或打盹了多长时间？','text',[],'例：2次 1h','',{question:'nap',value:'是'}),
  field('alcohol','今天你是否喝了含酒精的饮料？','radio',['是','否']),field('alcohol_detail','今天你喝了多少杯含酒精的饮料，最近一次饮酒是什么时候？','text',[],'例：2杯 晚上9:20','',{question:'alcohol',value:'是'}),
@@ -2148,7 +2211,7 @@ const preSleepQuestions=[
  field('stress','您当前的总体压力状态是（上床前）？','radio',['非常放松','比较放松','一般','比较焦虑','非常焦虑']),field('physical_discomfort','今天是否有身体不适？','textarea',[],'例：无 / 我感冒了…')
 ];
 const postWakeQuestions=[
- field('identity','姓名＋学号（非山东大学学生可不填学号）'),field('experiment_date','实验日期（填昨晚的实验日期）','date',[],'请填写昨晚开始实验的日期',yesterdayKey()),
+ field('identity','姓名＋学号（非山东大学学生可不填学号）'),field('experiment_date','实验日期（填昨晚的实验日期）','date',[],'请填写昨晚开始实验的日期',''),
  field('bed_time','你昨晚什么时候上床睡觉的（上床时间）？','text',[],'例：晚上10:15'),field('attempt_sleep_time','你什么时候尝试入睡的（放下手机打开设备的时间）？','text',[],'例：晚上11:00'),
  field('sleep_latency','你感觉入睡用了多长时间（填主观感觉）？','text',[],'例：20min'),field('awakenings','你一共醒了几次（不包括最后一次觉醒），总计这些觉醒状态持续了多久？','text',[],'例：3次 30min'),
  field('final_awake_time','你最后醒来是在什么时候？','text',[],'例：上午8:30'),field('early_awake','你是否比原计划更早醒来？','radio',['是','否','无计划']),
@@ -2182,6 +2245,7 @@ function requestBackfillStatus(type){
  const chosen=byId(config.date).value;
  if(!isValidDateKey(chosen))return;
  pendingBackfillQuery=chosen;backfillQuestionnaireStatus={};backfillQueryState='pending';
+ rememberStatusQuery('backfill',chosen,chosen);
  clearTimeout(backfillQueryTimer);
  // 未登录或离线时不会有状态回包，超时后退回“可直接填写”，不让界面卡在查询中。
  backfillQueryTimer=setTimeout(()=>{if(backfillQueryState==='pending'){backfillQueryState='failed';refreshBackfillPanel(type)}},8000);
@@ -2202,20 +2266,62 @@ function refreshBackfillPanel(type){
  else status.textContent=submission?'该日期已填写，继续填写会覆盖更新。':'该日期尚未填写。'
 }
 function updateBackfillPanels(){Object.keys(backfillPanels).forEach(refreshBackfillPanel)}
+// 回包只带回日期、不带题型，所以按日期回填：哪个面板选的正好是这一天就刷新它。
+function refreshBackfillPanelByDate(dateKey){
+ if(!isValidDateKey(dateKey))return;
+ Object.keys(backfillPanels).forEach(type=>{if(byId(backfillPanels[type].date).value===dateKey)refreshBackfillPanel(type)})
+}
 
+// 一份睡前/醒后问卷应该归档到哪一个睡眠夜。两份共用同一个日期键，不能各算各的。
+// 这个键就是「这一夜开始的那一天」（= 睡前问卷填写日）。生产数据印证：
+//   user01 睡前 09-10 19:47 -> 09-10；醒后 09-11 09:47 -> 也是 09-10。两行同键。
+// 所以：
+//   睡前——今天入睡，这一夜从今晚开始 -> 归今晚；
+//   醒后——填的是刚结束的那一夜，而它的开始日就是昨天 -> 归昨夜。
+// 后端 /api/v1/me/questionnaires 也按单一日期键查（pre_sleep 和 post_wake 都拿它比对），
+// 前端必须和它同口径，否则早上填的那份永远匹配不上、徽标点不亮。
+// 这是唯一的日期口径：表单默认值、补填区间、完成徽标、提交判定全从这里取。
+function expectedResponseDate(type){
+ if(type==='pre_sleep')return currentSleepNightKey();
+ if(type==='post_wake')return resetSleepNightKey();
+ return ''
+}
+// 首页查询用的睡眠夜键。刚结束的那一夜是唯一肯定有数据的睡眠夜：
+// 今晚的睡前问卷要等今晚才填，而昨夜的两份（昨晚睡前 + 今早醒后）都已经在库里。
+// 所以进 App 查的是昨夜——这也是醒来第一个动作时唯一能点亮两行的那一夜。
+function homeStatusDate(){return resetSleepNightKey()}
+function submissionResponseDate(type,submission){
+ if(!submission)return '';
+ const raw=typeof submission.responseDate==='string'?submission.responseDate.trim():'';
+ // PSQI 不按日期归档；每日问卷缺日期时退回它应有的归档日期，避免误判成未填写。
+ return isValidDateKey(raw)?raw:expectedResponseDate(type)
+}
 function isSurveyDone(key){
  const type=surveyTypeByKey[key],submission=serverQuestionnaireStatus[type];
- // PSQI 前后测跨实验周期有效；睡前与醒后都比较本次睡眠夜的日期。
- const sleepNightDate=type==='pre_sleep'?todayKey():type==='post_wake'?yesterdayKey():'';
- return Boolean(submission)&&(sleepNightDate?submission.responseDate===sleepNightDate:true)
+ // PSQI 一人一次，有记录即完成。
+ if(type!=='pre_sleep'&&type!=='post_wake')return Boolean(submission);
+ // 每日问卷：serverQuestionnaireStatus 只装「当前睡眠夜」的行——
+ // 首页查询走 isHomeStatusQuery 分桶，提交回调走 expectedResponseDate 判定，
+ // 两条入口都已按睡眠夜过滤过，所以有记录就说明这一夜的这一份填了。
+ // 不在这里再比一次日期：口径算两遍就容易互相打架（历史故障：填了却显示待填）。
+ return Boolean(submission)
 }
+// 全页问卷徽标的唯一出口：首页两行、左侧两行、按钮文案、系统提醒状态都在这里刷新。
+// 任何改变完成状态的路径都调它，避免某条分支只刷新了其中几处。
 function updateSurveyBadges(){
  const before=isSurveyDone('psqi-before'),after=isSurveyDone('psqi-after'),oneDone=isSurveyDone('daily-one'),twoDone=isSurveyDone('daily-two');
  const psqi=byId('psqiBadge');psqi.textContent=before&&after?'前后测已提交':before?'前测已提交':after?'后测已提交':'实验前/后';psqi.classList.toggle('done',before&&after);
- const dailyOne=byId('dailyOneBadge'),dailyTwo=byId('dailyTwoBadge');dailyOne.textContent=oneDone?'今晚已提交':'今晚';dailyTwo.textContent=twoDone?'昨夜已提交':'昨夜';dailyOne.classList.toggle('done',oneDone);dailyTwo.classList.toggle('done',twoDone);
- document.querySelectorAll('[data-questionnaire-form]').forEach(button=>{const formType=button.dataset.questionnaireForm;const done=formType==='pre_sleep'?oneDone:formType==='post_wake'?twoDone:Boolean(serverQuestionnaireStatus[formType]);button.classList.toggle('done',done);const labels={psqi_before:['填写实验前测','重新填写前测'],psqi_after:['填写实验后测','重新填写后测'],pre_sleep:['填写 '+todayKey()+' 睡前问卷','重新填写 '+todayKey()+' 睡前问卷'],post_wake:['填写 '+yesterdayKey()+' 醒后问卷','重新填写 '+yesterdayKey()+' 醒后问卷']};button.textContent=(labels[formType]||['填写问卷','重新填写问卷'])[done?1:0]});
- // 原生层保存完成状态，系统提醒才能在 App 未运行时跳过已填的每日问卷。
- notifyNative('questionnaire_completion_changed',{type:'bed',date:todayKey(),completed:oneDone});notifyNative('questionnaire_completion_changed',{type:'morning',date:yesterdayKey(),completed:twoDone});
+ // 两行都只显示「待填 / 已提交」：只说明这一夜的两个半场各填了没有。
+ // 「今晚 / 昨夜」这类相对说法会和表单里的「实验日期」并排出现，反而让人怀疑自己填的是哪一夜。
+ const dailyOne=byId('dailyOneBadge'),dailyTwo=byId('dailyTwoBadge');dailyOne.textContent=oneDone?'已提交':'待填';dailyTwo.textContent=twoDone?'已提交':'待填';dailyOne.classList.toggle('done',oneDone);dailyTwo.classList.toggle('done',twoDone);
+ // 左侧导航里的两个入口也要同步，否则提交完回到列表还显示「待填」。
+ const sidebarDailyOne=byId('dailyOneBadgeMini'),sidebarDailyTwo=byId('dailyTwoBadgeMini');
+ if(sidebarDailyOne)sidebarDailyOne.textContent=oneDone?'已完成':'待填写';
+ if(sidebarDailyTwo)sidebarDailyTwo.textContent=twoDone?'已完成':'待填写';
+ document.querySelectorAll('[data-questionnaire-form]').forEach(button=>{const formType=button.dataset.questionnaireForm;const done=formType==='pre_sleep'?oneDone:formType==='post_wake'?twoDone:Boolean(serverQuestionnaireStatus[formType]);button.classList.toggle('done',done);const labels={psqi_before:['填写实验前测','重新填写前测'],psqi_after:['填写实验后测','重新填写后测'],pre_sleep:['填写 '+currentSleepNightKey()+' 睡前问卷','重新填写 '+currentSleepNightKey()+' 睡前问卷'],post_wake:['填写 '+resetSleepNightKey()+' 醒后问卷','重新填写 '+resetSleepNightKey()+' 醒后问卷']};button.textContent=(labels[formType]||['填写问卷','重新填写问卷'])[done?1:0]});
+ // 原生层保存完成状态，系统提醒才能在 App 未运行时跳过已填的每日问卷。带上各自归属的日期，
+ // 原生层才能判断这条状态说的是哪一夜（睡前今晚、醒后昨晚）。
+ notifyNative('questionnaire_completion_changed',{type:'bed',date:currentSleepNightKey(),completed:oneDone});notifyNative('questionnaire_completion_changed',{type:'morning',date:resetSleepNightKey(),completed:twoDone});
  updateBackfillPanels();
 }
 
@@ -2241,9 +2347,10 @@ function updateQuestionnaireConditionalFields(){
 
 function openQuestionnaireForm(type,responseDate){
  const definition=questionnaireDefinitions[type];if(!definition)return;pendingQuestionnaireSubmission=null;activeQuestionnaireType=type;
- // 补填时用用户选中的睡眠夜，未指定时仍是今晚/昨夜，主流程行为不变。
- const defaultDate=defaultResponseDate(type);
+ // 补填时用用户选中的睡眠夜，未指定时按题型取默认：睡前是今晚，醒后是昨晚。
+ const defaultDate=expectedResponseDate(type);
  activeResponseDate=isValidDateKey(responseDate)?responseDate.trim():defaultDate;
+ // 补填是相对「这一份问卷本该填的那一夜」而言的，所以醒后默认拿昨晚比较，而不是拿今晚。
  const isBackfill=activeResponseDate!==defaultDate;
  const hasSubmission=isBackfill
   ?(pendingBackfillQuery===activeResponseDate&&Boolean(backfillQuestionnaireStatus[type]))
@@ -2256,7 +2363,7 @@ function openQuestionnaireForm(type,responseDate){
  updateQuestionnaireConditionalFields();byId('questionnaireSubmit').disabled=false;byId('questionnaireSubmit').textContent=hasSubmission?'更新并重新提交':'提交问卷';open('questionnaire-form')
 }
 
-function answerResponseDate(){return isValidDateKey(activeResponseDate)?activeResponseDate:defaultResponseDate(activeQuestionnaireType)}
+function answerResponseDate(){return isValidDateKey(activeResponseDate)?activeResponseDate:currentSleepNightKey()}
 function submitActiveQuestionnaire(event){
  event.preventDefault();const definition=questionnaireDefinitions[activeQuestionnaireType];if(!definition)return;const form=byId('questionnaireForm');if(!form.reportValidity())return;
  const answers={};let imageQuestion=null;definition.questions.forEach(question=>{const chosen=form.querySelector('[name="'+question.id+'"]:checked');const control=chosen||form.querySelector('[name="'+question.id+'"]');if(!control||control.disabled)return;if(question.type==='image'){imageQuestion=question;return}answers[question.id]={question:question.label,value:control.value}});
@@ -2327,23 +2434,20 @@ if(localStorage.getItem('sleep-pillow-large-font')==='1'){byId('largeFont').chec
 if(localStorage.getItem('sleep-pillow-elder-mode')==='1'){byId('elderMode').checked=true;document.body.classList.add('elder-mode')}
 
 // Android 原生层通过这个公开对象调用页面的返回、计时和 BLE 状态更新。
-window.SleepPillowPrototype={
- canGoBack:()=>stack.length>0,
- back,
- refreshFromNative,
- onBleEvent,
- onServerEvent,
- onNativeEvent,
+// onServerEvent / onNativeEvent 与 onBleEvent 必须挂在同一个对象上，
+// 否则后赋值的字面量会把前面的成员覆盖掉，Android 侧的两个事件入口就都断了。
+Object.assign(window.SleepPillowPrototype,{
  openInfoDetails,
  closeInfoDetails,
  requestSleepStart,
  showWakeQuestionnairePrompt,
  openQuestionnairesFromNotification:(type)=>{
   openQuestionnaireForm(type==='bed'?'pre_sleep':'post_wake');
+  rememberStatusQuery('home');
   notifyNative('server_questionnaire_status_requested');
   toast(type==='bed'?'请完成睡前问卷':'请完成醒后问卷')
  }
-};
+});
 
 // 首页显示今天日期；最后把底部导航初始化为登录页状态。
 const d=new Date();byId('today').textContent=(d.getMonth()+1)+'月'+d.getDate()+'日';

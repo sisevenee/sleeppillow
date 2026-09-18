@@ -542,7 +542,8 @@ public class MainActivity extends Activity {
             }
             if ("server_questionnaire_status_requested".equals(eventName)) {
                 if (serverClient != null) {
-                    // 补填问卷时会带上要查的睡眠夜日期；不带日期时仍是默认的今天/昨晚。
+                    // 补填问卷时会带上要查的睡眠夜日期；不带日期时默认查「昨夜」——
+                    // 睡前和醒后两份问卷归在同一个睡眠夜，用一个日期键查就够。
                     serverClient.loadQuestionnaireStatus(
                             readString(payloadJson, "preDate"),
                             readString(payloadJson, "postDate")

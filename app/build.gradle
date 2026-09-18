@@ -23,10 +23,10 @@ android {
         targetSdk = 35
 
         // versionCode 给系统和商店判断升级用，每发布一个新包都要递增。
-        versionCode = 16
+        versionCode = 17
 
         // versionName 是给用户看的版本号。
-        versionName = "0.3.5"
+        versionName = "0.3.6"
     }
 
     compileOptions {

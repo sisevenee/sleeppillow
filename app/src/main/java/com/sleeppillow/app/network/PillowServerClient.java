@@ -191,8 +191,12 @@ public final class PillowServerClient {
      */
     public void loadQuestionnaireStatus(String preDate, String postDate) {
         if (!hasSession()) return;
-        final String requestedPreDate = isQuestionnaireDateKey(preDate) ? preDate.trim() : formatChinaDate(0);
-        final String requestedPostDate = isQuestionnaireDateKey(postDate) ? postDate.trim() : formatChinaDate(-1);
+        // One sleep night has one date key, and both diary forms are filed under it. The
+        // default is therefore "last night" (the night that just ended): its bedtime form was
+        // filled yesterday evening and its wake-up form is filled this morning, so both rows
+        // carry that same date. Sending today for the bedtime half would never match a row.
+        final String requestedPreDate = isQuestionnaireDateKey(preDate) ? preDate.trim() : formatChinaDate(-1);
+        final String requestedPostDate = isQuestionnaireDateKey(postDate) ? postDate.trim() : requestedPreDate;
         executor.execute(() -> {
             try {
                 JSONObject response = request(

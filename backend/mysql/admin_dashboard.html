@@ -34,6 +34,10 @@
     .matrix-summary{display:flex;gap:20px;flex-wrap:wrap;margin-top:14px;font-size:13px}
     .matrix-summary b{font-size:18px;display:block;margin-top:3px}
     .matrix-hint{font-size:12px;color:#657085;margin-top:10px;line-height:1.6}
+    .export-preview{margin-top:16px;padding-top:15px;border-top:1px solid #e6ebf2}
+    .export-preview-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:10px}.export-preview-head b{font-size:14px}.export-preview-head p{margin-top:4px}
+    .export-preview-counts{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:#536174}.export-preview-counts b{color:#172033;font-size:14px;margin-left:3px}
+    .export-preview-table{max-height:320px;overflow:auto;border:1px solid #e6ebf2}.export-preview-table th{position:sticky;top:0;background:#f8faff;z-index:1}.export-preview-table tr:last-child td{border-bottom:0}
     @media(max-width:1040px){.chart-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media(max-width:820px){.shell{padding:20px 14px}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.topbar{align-items:flex-start;flex-direction:column}.chart-grid{grid-template-columns:1fr}.chart canvas{height:190px}.chart-dialog canvas{height:340px}}
   </style>
@@ -87,6 +91,12 @@
         <section class="panel">
           <div class="panel-head"><div><h2>批量导出</h2><p class="muted">问卷 ZIP 包含 CSV、原图和可离线预览的 HTML；睡眠记录按监测结束的中国日期归档。</p></div></div>
           <div class="actions" style="align-items:end"><label class="muted">开始日期<input id="batchExportStart" type="date" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"></label><label class="muted">结束日期<input id="batchExportEnd" type="date" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"></label><label class="muted">用户<select id="batchExportUser" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"><option value="">全部用户</option></select></label><label class="muted">问卷类型<select id="questionnaireExportType" style="display:block;margin-top:5px;padding:8px;border:1px solid #b9c5d6;border-radius:5px;font:inherit"><option value="">全部问卷</option><option value="pre_sleep">睡前问卷</option><option value="post_wake">醒后问卷</option><option value="psqi_before">PSQI 前测</option><option value="psqi_after">PSQI 后测</option></select></label><button class="secondary" id="exportQuestionnaires">导出问卷 ZIP（含图片）</button><button id="exportSleep">导出睡眠 ZIP</button></div>
+          <div class="export-preview">
+            <div class="export-preview-head"><div><b>当前筛选下的问卷</b><p class="muted" id="batchExportPreviewSummary">正在读取将要导出的内容…</p></div><span class="muted" id="batchExportPreviewTotal">--</span></div>
+            <div class="export-preview-counts" id="batchExportPreviewCounts"></div>
+            <div id="batchExportPreviewEmpty" class="empty">正在加载问卷清单…</div>
+            <div id="batchExportPreviewContent" class="export-preview-table hidden"><table><thead><tr><th>账号</th><th>问卷</th><th>记录日期</th><th>提交时间</th></tr></thead><tbody id="batchExportPreviewRows"></tbody></table></div>
+          </div>
         </section>
       </section>
       <section id="adminPanel-completeness" class="admin-panel">
@@ -155,11 +165,12 @@
   </div>
   <div id="chartTooltip" class="chart-tooltip hidden" role="tooltip"></div>
   <script>
-    const key='pillow-admin-session'; let token=localStorage.getItem(key)||''; let selectedDevice=null; let history=[];let openQuestionnaireId=null;let openQuestionnaireButton=null;let expandedChartKey='';let activeChartCanvas=null;let chartModalReturnFocus=null;const chartStates=new WeakMap();
+    const key='pillow-admin-session'; let token=localStorage.getItem(key)||''; let selectedDevice=null; let history=[];let openQuestionnaireId=null;let openQuestionnaireButton=null;let expandedChartKey='';let activeChartCanvas=null;let chartModalReturnFocus=null;let batchPreviewRequest=0;const chartStates=new WeakMap();
     const byId=id=>document.getElementById(id);
     const api=async(path,options={})=>{const response=await fetch(path,{...options,headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,...options.headers}});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'请求失败');return body};
     async function downloadAdminExport(path,fallbackName){setText('dashboardError','正在生成导出文件…');const response=await fetch(path,{headers:{Authorization:'Bearer '+token}});if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.error||'导出失败')}const disposition=response.headers.get('Content-Disposition')||'';const match=/filename="([^"]+)"/.exec(disposition);const link=document.createElement('a');link.href=URL.createObjectURL(await response.blob());link.download=match?match[1]:fallbackName;link.click();URL.revokeObjectURL(link.href);setText('dashboardError','导出已开始。')}
-    async function exportBatchQuestionnaires(){const start=byId('batchExportStart').value,end=byId('batchExportEnd').value;if(!start||!end||start>end)throw new Error('请选择有效的开始和结束日期。');const query=new URLSearchParams({start,end});const username=byId('batchExportUser').value,type=byId('questionnaireExportType').value;if(username)query.set('username',username);if(type)query.set('type',type);await downloadAdminExport('/api/v1/admin/exports/questionnaires?'+query,'questionnaires_with_images.zip')}
+    function batchQuestionnaireQuery(){const start=byId('batchExportStart').value,end=byId('batchExportEnd').value;if(!start||!end||start>end)throw new Error('请选择有效的开始和结束日期。');const query=new URLSearchParams({start,end});const username=byId('batchExportUser').value,type=byId('questionnaireExportType').value;if(username)query.set('username',username);if(type)query.set('type',type);return query}
+    async function exportBatchQuestionnaires(){await downloadAdminExport('/api/v1/admin/exports/questionnaires?'+batchQuestionnaireQuery(),'questionnaires_with_images.zip')}
     async function exportBatchSleep(){const start=byId('batchExportStart').value,end=byId('batchExportEnd').value;if(!start||!end||start>end)throw new Error('请选择有效的开始和结束日期。');const query=new URLSearchParams({start,end});const username=byId('batchExportUser').value;if(username)query.set('username',username);await downloadAdminExport('/api/v1/admin/exports/sleep?'+query,'sleep_export.zip')}
     const formatTime=value=>value?new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}):'尚未上传';
     const setText=(id,value)=>byId(id).textContent=value;
@@ -199,6 +210,23 @@
     function renderQuestionnaireItems(items){const rows=byId('questionnaireRows');rows.textContent='';setText('questionnaireCount',items.length+' 份问卷');items.forEach(item=>{const row=document.createElement('tr');[item.username,questionnaireNames[item.questionnaireType]||item.questionnaireType,item.responseDate,formatTime(item.submittedAt||item.updatedAt)].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell)});const cell=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='查看答案';button.onclick=()=>openQuestionnaireAnswer(item,button,'查看答案','收起答案');cell.append(button);row.append(cell);rows.append(row)});if(!items.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=5;cell.className='empty';cell.textContent='所选日期暂无问卷提交记录。';row.append(cell);rows.append(row)}}
     function renderPsqiItems(items){const rows=byId('psqiRows');rows.textContent='';setText('psqiCount',items.length+' 份量表');items.forEach(item=>{const row=document.createElement('tr');[item.username,questionnaireNames[item.questionnaireType]||item.questionnaireType].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell)});const score=document.createElement('td');score.textContent=psqiScoreLabel(item);score.className=item.psqiScoreStatus==='complete'?'score':'score-incomplete';row.append(score);[item.responseDate,formatTime(item.submittedAt||item.updatedAt)].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell)});const cell=document.createElement('td'),button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='查看详情';button.onclick=()=>openQuestionnaireAnswer(item,button,'查看详情','收起详情');cell.append(button);row.append(cell);rows.append(row)});if(!items.length){const row=document.createElement('tr'),cell=document.createElement('td');cell.colSpan=6;cell.className='empty';cell.textContent='尚未收到 PSQI 前测或后测。';row.append(cell);rows.append(row)}}
     async function loadQuestionnaires(){const date=byId('questionnaireDate').value||chinaDateValue();const data=await api('/api/v1/admin/questionnaires?'+new URLSearchParams({date}));closeQuestionnaireAnswer();questionnaireItems=data.items||[];psqiItems=data.psqiItems||[];renderQuestionnaireCompletion(data.completion||[]);renderQuestionnaireItems(questionnaireItems);renderPsqiItems(psqiItems)}
+    function renderBatchQuestionnairePreview(data){
+      const user=byId('batchExportUser').value||'全部用户',type=questionnaireNames[byId('questionnaireExportType').value]||'全部问卷';
+      setText('batchExportPreviewSummary',data.startDate+' 至 '+data.endDate+' · '+user+' · '+type);
+      setText('batchExportPreviewTotal','共 '+data.total+' 份');
+      const counts=byId('batchExportPreviewCounts');counts.textContent='';
+      ['pre_sleep','post_wake','psqi_before','psqi_after'].forEach(key=>{const item=document.createElement('span');item.textContent=questionnaireNames[key]+' ';const value=document.createElement('b');value.textContent=String((data.counts||{})[key]||0);item.append(value);counts.append(item)});
+      const rows=byId('batchExportPreviewRows');rows.textContent='';
+      (data.items||[]).slice().reverse().forEach(item=>{const row=document.createElement('tr');[item.username,questionnaireNames[item.questionnaireType]||item.questionnaireType,item.responseDate,formatTime(item.submittedAt)].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell)});rows.append(row)});
+      const hasItems=Boolean((data.items||[]).length);byId('batchExportPreviewEmpty').classList.toggle('hidden',hasItems);byId('batchExportPreviewContent').classList.toggle('hidden',!hasItems);if(!hasItems)setText('batchExportPreviewEmpty','当前筛选范围内没有已提交的问卷。')
+    }
+    async function loadBatchQuestionnairePreview(){
+      const requestId=++batchPreviewRequest;
+      try{
+        const query=batchQuestionnaireQuery();setText('batchExportPreviewSummary','正在读取将要导出的内容…');setText('batchExportPreviewTotal','--');byId('batchExportPreviewCounts').textContent='';byId('batchExportPreviewContent').classList.add('hidden');byId('batchExportPreviewEmpty').classList.remove('hidden');setText('batchExportPreviewEmpty','正在加载问卷清单…');
+        const data=await api('/api/v1/admin/exports/questionnaires/preview?'+query);if(requestId!==batchPreviewRequest)return;renderBatchQuestionnairePreview(data)
+      }catch(error){if(requestId!==batchPreviewRequest)return;setText('batchExportPreviewSummary','无法预览当前筛选内容');setText('batchExportPreviewTotal','--');byId('batchExportPreviewCounts').textContent='';byId('batchExportPreviewContent').classList.add('hidden');byId('batchExportPreviewEmpty').classList.remove('hidden');setText('batchExportPreviewEmpty',error.message)}
+    }
     async function loadCompleteness(){
       const start=byId('completenessStart').value,end=byId('completenessEnd').value;
       if(!start||!end||start>end)throw new Error('请选择有效的开始和结束日期。');
@@ -297,10 +325,11 @@
     document.querySelectorAll('[data-close-chart-modal]').forEach(element=>element.onclick=closeChartModal);
     byId('closeChartModal').onclick=closeChartModal;
     byId('questionnaireAnswerClose').onclick=closeQuestionnaireAnswer;
+    ['batchExportStart','batchExportEnd','batchExportUser','questionnaireExportType'].forEach(id=>byId(id).addEventListener('change',loadBatchQuestionnairePreview));
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!byId('chartModal').classList.contains('hidden'))closeChartModal()});
     let chartResizeFrame=0;window.addEventListener('resize',()=>{cancelAnimationFrame(chartResizeFrame);chartResizeFrame=requestAnimationFrame(()=>{hideChartTooltip();if(!selectedDevice||!byId('adminPanel-devices').classList.contains('active'))return;renderTelemetryCharts()})});
-    byId('loginForm').onsubmit=async event=>{event.preventDefault();setText('loginError','');try{const data=await api('/api/v1/auth/login',{method:'POST',headers:{},body:JSON.stringify({username:byId('username').value.trim(),password:byId('password').value})});if(data.role!=='admin')throw new Error('该账号不是管理员账号');token=data.accessToken;localStorage.setItem(key,token);showDashboard(data);await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()])}catch(error){setText('loginError',error.message)}};
-    byId('refresh').onclick=async()=>{try{await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()]);if(selectedDevice)await loadDetail(selectedDevice)}catch(error){setText('dashboardError',error.message)}};
+    byId('loginForm').onsubmit=async event=>{event.preventDefault();setText('loginError','');try{const data=await api('/api/v1/auth/login',{method:'POST',headers:{},body:JSON.stringify({username:byId('username').value.trim(),password:byId('password').value})});if(data.role!=='admin')throw new Error('该账号不是管理员账号');token=data.accessToken;localStorage.setItem(key,token);showDashboard(data);await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()]);await loadBatchQuestionnairePreview()}catch(error){setText('loginError',error.message)}};
+    byId('refresh').onclick=async()=>{try{await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()]);await loadBatchQuestionnairePreview();if(selectedDevice)await loadDetail(selectedDevice)}catch(error){setText('dashboardError',error.message)}};
     byId('refreshQuestionnaires').onclick=async()=>{try{setText('dashboardError','');await loadQuestionnaires()}catch(error){setText('dashboardError',error.message)}};
     byId('refreshCompleteness').onclick=async()=>{try{setText('dashboardError','');await loadCompleteness()}catch(error){setText('dashboardError',error.message)}};
     byId('exportQuestionnaires').onclick=async()=>{try{await exportBatchQuestionnaires()}catch(error){setText('dashboardError',error.message)}};
@@ -308,7 +337,7 @@
     byId('loadCharts').onclick=async()=>{try{setText('dashboardError','');await loadTelemetryRange()}catch(error){setText('dashboardError',error.message)}};
     byId('logout').onclick=async()=>{try{await api('/api/v1/auth/logout',{method:'POST'})}catch(error){}token='';localStorage.removeItem(key);selectedDevice=null;showLogin()};
     byId('export').onclick=exportCsv;
-    (async()=>{if(!token)return showLogin();try{const profile=await api('/api/v1/me');if(profile.role!=='admin')throw new Error('管理员会话无效');showDashboard(profile);await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()])}catch(error){token='';localStorage.removeItem(key);showLogin('登录已失效，请重新登录。')}})();
+    (async()=>{if(!token)return showLogin();try{const profile=await api('/api/v1/me');if(profile.role!=='admin')throw new Error('管理员会话无效');showDashboard(profile);await Promise.all([loadDevices(),loadUsers(),loadQuestionnaires()]);await loadBatchQuestionnairePreview()}catch(error){token='';localStorage.removeItem(key);showLogin('登录已失效，请重新登录。')}})();
   </script>
 </body>
 </html>

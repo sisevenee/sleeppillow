@@ -1164,6 +1164,41 @@ def load_admin_sleep_export_sessions(
         return cursor.fetchall()
 
 
+def load_admin_questionnaire_export_rows(
+    connection: pymysql.connections.Connection,
+    start_day: date,
+    end_day: date,
+    questionnaire_type: str = "",
+    username: str = "",
+) -> list[dict[str, Any]]:
+    """Load the exact questionnaire rows used by both export preview and ZIP generation."""
+    clauses = [
+        "s.response_date >= %s",
+        "s.response_date <= %s",
+        "u.role = 'user'",
+    ]
+    parameters: list[Any] = [start_day, end_day]
+    if questionnaire_type:
+        clauses.append("s.questionnaire_type = %s")
+        parameters.append(questionnaire_type)
+    if username:
+        clauses.append("u.username = %s")
+        parameters.append(username)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT s.id, s.user_id, s.questionnaire_type, s.response_date, s.answers_json,
+                   s.submitted_at, s.updated_at, u.username
+            FROM questionnaire_submissions s
+            JOIN users u ON u.id = s.user_id
+            WHERE """ + " AND ".join(clauses) + """
+            ORDER BY s.response_date ASC, u.username ASC, s.questionnaire_type ASC, s.id ASC
+            """,
+            parameters,
+        )
+        return cursor.fetchall()
+
+
 def load_sleep_export_samples(
     connection: pymysql.connections.Connection, session: dict[str, Any]
 ) -> list[dict[str, Any]]:
@@ -1641,10 +1676,14 @@ class PillowApiHandler(BaseHTTPRequestHandler):
             })
             return
 
-        if parsed.path == "/api/v1/admin/exports/questionnaires":
+        if parsed.path in (
+            "/api/v1/admin/exports/questionnaires",
+            "/api/v1/admin/exports/questionnaires/preview",
+        ):
             if user["role"] != "admin":
                 self.send_json(HTTPStatus.FORBIDDEN, {"error": "Administrator access is required"})
                 return
+            preview_only = parsed.path.endswith("/preview")
             query = parse_qs(parsed.query)
             requested_type = query.get("type", [""])[0].strip()
             requested_user = query.get("username", [""])[0].strip()
@@ -1659,67 +1698,73 @@ class PillowApiHandler(BaseHTTPRequestHandler):
             except ValueError as error:
                 self.send_json(HTTPStatus.BAD_REQUEST, {"error": str(error)})
                 return
-            clauses = ["s.response_date >= %s", "s.response_date <= %s"]
-            parameters: list[Any] = [start_day, end_day]
-            if requested_type:
-                clauses.append("s.questionnaire_type = %s")
-                parameters.append(requested_type)
-            if requested_user:
-                clauses.extend(["u.username = %s", "u.role = 'user'"])
-                parameters.append(requested_user)
-            with db_connection() as connection, connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT s.id, s.user_id, s.questionnaire_type, s.response_date, s.answers_json,
-                           s.submitted_at, s.updated_at, u.username
-                    FROM questionnaire_submissions s
-                    JOIN users u ON u.id = s.user_id
-                    WHERE """ + " AND ".join(clauses) + """
-                    ORDER BY s.response_date ASC, u.username ASC, s.questionnaire_type ASC, s.id ASC
-                    """,
-                    parameters,
+            with db_connection() as connection:
+                rows = load_admin_questionnaire_export_rows(
+                    connection, start_day, end_day, requested_type, requested_user,
                 )
-                rows = cursor.fetchall()
-                attachment_ids: set[int] = set()
-                for row in rows:
-                    try:
-                        answers = json.loads(row["answers_json"])
-                    except (TypeError, json.JSONDecodeError):
-                        answers = {}
-                    if not isinstance(answers, dict):
-                        continue
-                    for answer in answers.values():
-                        if not isinstance(answer, dict):
-                            continue
+                if preview_only:
+                    counts = {questionnaire_type: 0 for questionnaire_type in QUESTIONNAIRE_TYPES}
+                    for row in rows:
+                        counts[row["questionnaire_type"]] += 1
+                    self.send_json(HTTPStatus.OK, {
+                        "startDate": start_day.isoformat(),
+                        "endDate": end_day.isoformat(),
+                        "username": requested_user or None,
+                        "questionnaireType": requested_type or None,
+                        "total": len(rows),
+                        "counts": counts,
+                        "items": [{
+                            "id": int(row["id"]),
+                            "username": row["username"],
+                            "questionnaireType": row["questionnaire_type"],
+                            "responseDate": row["response_date"].isoformat(),
+                            "submittedAt": format_china_local_timestamp(
+                                row["submitted_at"] or row["updated_at"]
+                            ),
+                        } for row in rows],
+                    })
+                    return
+                with connection.cursor() as cursor:
+                    attachment_ids: set[int] = set()
+                    for row in rows:
                         try:
-                            attachment_id = int(answer.get("attachmentId", 0))
-                        except (TypeError, ValueError):
-                            attachment_id = 0
-                        if attachment_id > 0:
-                            attachment_ids.add(attachment_id)
-                attachments: list[dict[str, Any]] = []
-                if attachment_ids:
-                    placeholders = ",".join(["%s"] * len(attachment_ids))
-                    cursor.execute(
-                        """
-                        SELECT a.id, a.user_id, a.questionnaire_type, a.response_date,
-                               a.attachment_key, a.content_type, a.image_data, u.username
-                        FROM questionnaire_attachments a
-                        JOIN users u ON u.id = a.user_id
-                        WHERE a.id IN (""" + placeholders + ") ORDER BY a.id",
-                        list(sorted(attachment_ids)),
-                    )
-                    selected_keys = {
-                        (int(row["user_id"]), row["questionnaire_type"], row["response_date"])
-                        for row in rows
-                    }
-                    attachments = [
-                        attachment for attachment in cursor.fetchall()
-                        if (
-                            int(attachment["user_id"]), attachment["questionnaire_type"],
-                            attachment["response_date"],
-                        ) in selected_keys
-                    ]
+                            answers = json.loads(row["answers_json"])
+                        except (TypeError, json.JSONDecodeError):
+                            answers = {}
+                        if not isinstance(answers, dict):
+                            continue
+                        for answer in answers.values():
+                            if not isinstance(answer, dict):
+                                continue
+                            try:
+                                attachment_id = int(answer.get("attachmentId", 0))
+                            except (TypeError, ValueError):
+                                attachment_id = 0
+                            if attachment_id > 0:
+                                attachment_ids.add(attachment_id)
+                    attachments: list[dict[str, Any]] = []
+                    if attachment_ids:
+                        placeholders = ",".join(["%s"] * len(attachment_ids))
+                        cursor.execute(
+                            """
+                            SELECT a.id, a.user_id, a.questionnaire_type, a.response_date,
+                                   a.attachment_key, a.content_type, a.image_data, u.username
+                            FROM questionnaire_attachments a
+                            JOIN users u ON u.id = a.user_id
+                            WHERE a.id IN (""" + placeholders + ") ORDER BY a.id",
+                            list(sorted(attachment_ids)),
+                        )
+                        selected_keys = {
+                            (int(row["user_id"]), row["questionnaire_type"], row["response_date"])
+                            for row in rows
+                        }
+                        attachments = [
+                            attachment for attachment in cursor.fetchall()
+                            if (
+                                int(attachment["user_id"]), attachment["questionnaire_type"],
+                                attachment["response_date"],
+                            ) in selected_keys
+                        ]
             if not rows:
                 self.send_json(HTTPStatus.NOT_FOUND, {"error": "No questionnaire submissions in the selected dates"})
                 return

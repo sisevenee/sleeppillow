@@ -1109,6 +1109,7 @@ def load_completeness_matrix(
 
 def load_admin_sleep_export_sessions(
     connection: pymysql.connections.Connection, start_utc: datetime, end_utc: datetime,
+    username: str = "",
 ) -> list[dict[str, Any]]:
     """Load finished or safely stale sessions for every attributed ordinary user.
 
@@ -1120,6 +1121,12 @@ def load_admin_sleep_export_sessions(
     to user_current_devices only covers rows recorded before that column existed: it answers
     "who owns this device now", which is wrong after a handover, so it must never take priority.
     """
+    user_clause = " AND u.username = %s" if username else ""
+    parameters: list[Any] = [
+        start_utc, end_utc, SESSION_STALE_AFTER_MINUTES, start_utc, end_utc,
+    ]
+    if username:
+        parameters.append(username)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -1140,18 +1147,19 @@ def load_admin_sleep_export_sessions(
                 AND t.sampled_at >= s.started_at
                 AND t.sampled_at <= COALESCE(s.ended_at, s.last_sample_at)
             WHERE s.last_sample_at IS NOT NULL
-              AND (
+               AND (
                     (s.ended_at IS NOT NULL AND s.ended_at >= %s AND s.ended_at < %s)
                  OR (s.ended_at IS NULL
                      AND s.last_sample_at < UTC_TIMESTAMP() - INTERVAL %s MINUTE
                      AND s.last_sample_at >= %s AND s.last_sample_at < %s)
-              )
+               )
+              """ + user_clause + """
             GROUP BY u.id, u.username, d.id, d.device_id, d.display_name, s.id,
                      s.started_at, s.ended_at, s.last_sample_at, s.start_source, s.end_source
             HAVING COUNT(t.id) > 0
             ORDER BY ended_at ASC, u.username ASC, s.id ASC
             """,
-            (start_utc, end_utc, SESSION_STALE_AFTER_MINUTES, start_utc, end_utc),
+            parameters,
         )
         return cursor.fetchall()
 
@@ -1639,8 +1647,12 @@ class PillowApiHandler(BaseHTTPRequestHandler):
                 return
             query = parse_qs(parsed.query)
             requested_type = query.get("type", [""])[0].strip()
+            requested_user = query.get("username", [""])[0].strip()
             if requested_type and requested_type not in QUESTIONNAIRE_TYPES:
                 self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Unknown questionnaire type"})
+                return
+            if len(requested_user) > 64:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid username"})
                 return
             try:
                 start_day, end_day = parse_admin_export_range(query)
@@ -1652,6 +1664,9 @@ class PillowApiHandler(BaseHTTPRequestHandler):
             if requested_type:
                 clauses.append("s.questionnaire_type = %s")
                 parameters.append(requested_type)
+            if requested_user:
+                clauses.extend(["u.username = %s", "u.role = 'user'"])
+                parameters.append(requested_user)
             with db_connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
                     """
@@ -1708,8 +1723,12 @@ class PillowApiHandler(BaseHTTPRequestHandler):
             if not rows:
                 self.send_json(HTTPStatus.NOT_FOUND, {"error": "No questionnaire submissions in the selected dates"})
                 return
-            suffix = requested_type or "all"
-            filename = f"questionnaires_{start_day.isoformat()}_to_{end_day.isoformat()}_{suffix}_with_images.zip"
+            user_suffix = safe_filename_component(requested_user) if requested_user else "all_users"
+            type_suffix = requested_type or "all_questionnaires"
+            filename = (
+                f"questionnaires_{start_day.isoformat()}_to_{end_day.isoformat()}_"
+                f"{user_suffix}_{type_suffix}_with_images.zip"
+            )
             self.send_download("application/zip", filename, questionnaire_export_zip(rows, attachments))
             return
 
@@ -1718,6 +1737,10 @@ class PillowApiHandler(BaseHTTPRequestHandler):
                 self.send_json(HTTPStatus.FORBIDDEN, {"error": "Administrator access is required"})
                 return
             query = parse_qs(parsed.query)
+            requested_user = query.get("username", [""])[0].strip()
+            if len(requested_user) > 64:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid username"})
+                return
             try:
                 start_day, end_day = parse_admin_export_range(query)
             except ValueError as error:
@@ -1725,12 +1748,15 @@ class PillowApiHandler(BaseHTTPRequestHandler):
                 return
             start_utc, end_utc = china_day_bounds_utc(start_day, end_day)
             with db_connection() as connection:
-                sessions = load_admin_sleep_export_sessions(connection, start_utc, end_utc)
+                sessions = load_admin_sleep_export_sessions(
+                    connection, start_utc, end_utc, requested_user,
+                )
                 if not sessions:
                     self.send_json(HTTPStatus.NOT_FOUND, {"error": "No completed sleep records in the selected dates"})
                     return
                 archive = sleep_export_zip(connection, sessions)
-            filename = f"sleep_{start_day.isoformat()}_to_{end_day.isoformat()}_all_users.zip"
+            user_suffix = safe_filename_component(requested_user) if requested_user else "all_users"
+            filename = f"sleep_{start_day.isoformat()}_to_{end_day.isoformat()}_{user_suffix}.zip"
             self.send_download("application/zip", filename, archive)
             return
 

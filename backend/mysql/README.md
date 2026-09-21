@@ -15,8 +15,8 @@ device token. ESP32 upload credentials and App login accounts are independent.
 | Device recording status | `GET /api/v1/me/device-recording` | App login session |
 | Prepare / wake marker | `POST /api/v1/me/sleep-markers/prepare` or `/wake` | App login session |
 | Legacy start / end marker | `POST /api/v1/me/sleep-sessions/start` or `/end` | App login session |
-| Questionnaire export | `GET /api/v1/admin/exports/questionnaires?start=YYYY-MM-DD&end=YYYY-MM-DD&type=pre_sleep` | Administrator session |
-| Sleep export | `GET /api/v1/admin/exports/sleep?start=YYYY-MM-DD&end=YYYY-MM-DD` | Administrator session |
+| Questionnaire export | `GET /api/v1/admin/exports/questionnaires?start=YYYY-MM-DD&end=YYYY-MM-DD&type=pre_sleep&username=user01` | Administrator session |
+| Sleep export | `GET /api/v1/admin/exports/sleep?start=YYYY-MM-DD&end=YYYY-MM-DD&username=user01` | Administrator session |
 | List devices | `GET /api/v1/devices` | Administrator session |
 | Upload telemetry | `POST /api/v1/devices/{deviceId}/telemetry` | That device's token |
 | Latest telemetry | `GET /api/v1/devices/{deviceId}/latest` | App login session |
@@ -33,6 +33,9 @@ China-calendar days per export):
   answers contain their relative `images/...` path. After extracting the ZIP,
   the HTML report displays each image beside its answer without requiring a
   live administrator session.
+- Both batch exports accept an optional `username`. Omitting it exports all
+  active ordinary users; the administrator dashboard provides an "all users"
+  option plus one option for every active participant account.
 - Sleep export creates one ZIP with `sleep_overview.csv` plus raw CSV files
   named `YYYY-MM-DD_userXX_sleep.csv`. A 22:00--08:00 recording belongs to the
   China-local date on which it ends. The overview includes both monitoring

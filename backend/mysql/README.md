@@ -27,10 +27,12 @@ is `admin` and can list all registered devices, inspect history, and export the
 loaded rows as CSV. Its batch export area has two date-range actions (up to 31
 China-calendar days per export):
 
-- Questionnaire export creates one Excel-compatible CSV. Each response occupies
-  one row, fixed metadata columns come first, and answer columns are created
-  from the stored question text. Image answers retain their attachment ID so an
-  administrator can find the protected image in the dashboard.
+- Questionnaire export creates one ZIP containing an Excel-compatible
+  `questionnaires.csv`, the original uploaded images, and
+  `questionnaires_preview.html`. Each response occupies one CSV row and image
+  answers contain their relative `images/...` path. After extracting the ZIP,
+  the HTML report displays each image beside its answer without requiring a
+  live administrator session.
 - Sleep export creates one ZIP with `sleep_overview.csv` plus raw CSV files
   named `YYYY-MM-DD_userXX_sleep.csv`. A 22:00--08:00 recording belongs to the
   China-local date on which it ends. The overview includes both monitoring

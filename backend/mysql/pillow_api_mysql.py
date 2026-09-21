@@ -6,6 +6,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import hmac
+import html
 import io
 import json
 import math
@@ -205,7 +206,7 @@ def safe_filename_component(value: object) -> str:
     return cleaned[:64] or "user"
 
 
-def questionnaire_answer_text(answer: object) -> str:
+def questionnaire_answer_text(answer: object, attachment_paths: dict[int, str] | None = None) -> str:
     """Preserve a submitted answer and make a linked questionnaire image discoverable."""
     if not isinstance(answer, dict):
         return ""
@@ -220,7 +221,8 @@ def questionnaire_answer_text(answer: object) -> str:
     except (TypeError, ValueError):
         attachment_id = 0
     if attachment_id > 0:
-        suffix = f"已上传图片（编号 {attachment_id}）"
+        attachment_path = (attachment_paths or {}).get(attachment_id)
+        suffix = f"已上传图片：{attachment_path}" if attachment_path else f"已上传图片（编号 {attachment_id}）"
         return f"{text}；{suffix}" if text else suffix
     return text
 
@@ -371,7 +373,9 @@ def calculate_psqi_summary(answers: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def questionnaire_export_csv(rows: list[dict[str, Any]]) -> bytes:
+def questionnaire_export_csv(
+    rows: list[dict[str, Any]], attachment_paths: dict[int, str] | None = None,
+) -> bytes:
     """Flatten flexible questionnaire JSON into the one-row-per-response CSV administrators expect."""
     parsed_rows: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]] = []
     columns: list[tuple[str, str]] = []
@@ -421,12 +425,130 @@ def questionnaire_export_csv(rows: list[dict[str, Any]]) -> bytes:
         ]
         for column_type, key in columns:
             answer = answers.get(key) if row["questionnaire_type"] == column_type else None
-            values.append(questionnaire_answer_text(answer))
+            values.append(questionnaire_answer_text(answer, attachment_paths))
         export_rows.append(values)
     return csv_bytes(
         ["账号", "问卷类型", "记录日期（睡眠夜日期）", "提交时间（中国时间）", "最后修改时间（中国时间）", "PSQI总分（0-21）", "PSQI评分状态"] + answer_headers,
         export_rows,
     )
+
+
+def questionnaire_attachment_extension(content_type: str) -> str:
+    """Return a stable extension for image types accepted by the upload endpoint."""
+    return {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }.get(content_type, "bin")
+
+
+def questionnaire_attachment_paths(attachments: list[dict[str, Any]]) -> dict[int, str]:
+    """Give every exported image a readable, collision-free relative ZIP path."""
+    paths: dict[int, str] = {}
+    for attachment in attachments:
+        attachment_id = int(attachment["id"])
+        response_date = attachment["response_date"].isoformat()
+        username = safe_filename_component(attachment["username"])
+        questionnaire_type = safe_filename_component(attachment["questionnaire_type"])
+        attachment_key = safe_filename_component(attachment["attachment_key"])
+        extension = questionnaire_attachment_extension(str(attachment["content_type"]))
+        paths[attachment_id] = (
+            f"images/{response_date}_{username}_{questionnaire_type}_{attachment_key}_{attachment_id}.{extension}"
+        )
+    return paths
+
+
+def questionnaire_export_preview_html(
+    rows: list[dict[str, Any]], attachment_paths: dict[int, str],
+) -> bytes:
+    """Build an offline report that renders exported questionnaire images beside their answers."""
+    sections: list[str] = []
+    for row in rows:
+        try:
+            answers = json.loads(row["answers_json"])
+        except (TypeError, json.JSONDecodeError):
+            answers = {}
+        if not isinstance(answers, dict):
+            answers = {}
+        answer_rows: list[str] = []
+        for key, answer in answers.items():
+            if not isinstance(answer, dict):
+                continue
+            question = html.escape(str(answer.get("question") or key))
+            value = answer.get("value", "")
+            if isinstance(value, (dict, list)):
+                value_text = json.dumps(value, ensure_ascii=False)
+            else:
+                value_text = str(value)
+            content = f'<div class="value">{html.escape(value_text)}</div>' if value_text else ""
+            try:
+                attachment_id = int(answer.get("attachmentId", 0))
+            except (TypeError, ValueError):
+                attachment_id = 0
+            attachment_path = attachment_paths.get(attachment_id)
+            if attachment_path:
+                escaped_path = html.escape(attachment_path, quote=True)
+                content += (
+                    f'<a class="image-link" href="{escaped_path}" target="_blank">'
+                    f'<img src="{escaped_path}" alt="{question}"><span>点击查看原图</span></a>'
+                )
+            answer_rows.append(f"<tr><th>{question}</th><td>{content or '-'}</td></tr>")
+        label = html.escape(QUESTIONNAIRE_TYPE_LABELS.get(
+            row["questionnaire_type"], row["questionnaire_type"]
+        ))
+        sections.append(
+            '<section class="submission">'
+            f'<h2>{html.escape(str(row["username"]))} · {label}</h2>'
+            f'<p>{row["response_date"].isoformat()} · '
+            f'{html.escape(format_china_local_datetime(row["submitted_at"]))}</p>'
+            f'<table>{"".join(answer_rows) or "<tr><td>无可读答案</td></tr>"}</table>'
+            '</section>'
+        )
+    document = """<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>问卷导出（含图片）</title>
+<style>
+body{margin:0;background:#f4f6f9;color:#1d2a3a;font-family:Arial,"Microsoft YaHei",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px}h1{font-size:24px;margin:0 0 8px}.note{color:#657085;margin:0 0 20px}
+.submission{background:#fff;border:1px solid #dfe5ed;border-radius:7px;padding:18px;margin-bottom:18px}
+h2{font-size:18px;margin:0 0 5px}.submission>p{color:#657085;margin:0 0 14px}table{width:100%;border-collapse:collapse}
+th,td{border-top:1px solid #e7ebf1;padding:10px;text-align:left;vertical-align:top}th{width:36%;font-weight:600}.value{white-space:pre-wrap;line-height:1.5}
+.image-link{display:inline-flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:9px;color:#245bbd;text-decoration:none}
+.image-link img{display:block;max-width:min(520px,100%);max-height:360px;border:1px solid #d9e0e9;border-radius:5px;background:#f7f8fa}
+@media(max-width:640px){main{padding:12px}.submission{padding:12px}th,td{display:block;width:auto}th{border-bottom:0;padding-bottom:3px}td{border-top:0;padding-top:3px}}
+</style></head><body><main><h1>问卷汇总</h1><p class="note">图片与 CSV 均在当前压缩包中；请先完整解压，再打开本页。</p>"""
+    document += "".join(sections)
+    document += "</main></body></html>"
+    return document.encode("utf-8")
+
+
+def questionnaire_export_zip(
+    rows: list[dict[str, Any]], attachments: list[dict[str, Any]],
+) -> bytes:
+    """Package the analysis CSV, an offline image preview, and original images together."""
+    attachment_paths = questionnaire_attachment_paths(attachments)
+    archive_buffer = io.BytesIO()
+    with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("questionnaires.csv", questionnaire_export_csv(rows, attachment_paths))
+        archive.writestr(
+            "questionnaires_preview.html",
+            questionnaire_export_preview_html(rows, attachment_paths),
+        )
+        archive.writestr(
+            "README.txt",
+            (
+                "1. 先完整解压本 ZIP。\r\n"
+                "2. questionnaires.csv 用于 Excel 数据分析，图片答案栏会显示 images 相对路径。\r\n"
+                "3. 用浏览器打开 questionnaires_preview.html，可在答案旁直接查看图片。\r\n"
+                "4. images 目录保存未转码的原始上传图片。\r\n"
+            ).encode("utf-8-sig"),
+        )
+        for attachment in attachments:
+            attachment_id = int(attachment["id"])
+            path = attachment_paths.get(attachment_id)
+            if path:
+                archive.writestr(path, bytes(attachment["image_data"]))
+    return archive_buffer.getvalue()
 
 
 def image_content_type(image_data: bytes) -> str | None:
@@ -1533,7 +1655,7 @@ class PillowApiHandler(BaseHTTPRequestHandler):
             with db_connection() as connection, connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT s.questionnaire_type, s.response_date, s.answers_json,
+                    SELECT s.id, s.user_id, s.questionnaire_type, s.response_date, s.answers_json,
                            s.submitted_at, s.updated_at, u.username
                     FROM questionnaire_submissions s
                     JOIN users u ON u.id = s.user_id
@@ -1543,12 +1665,52 @@ class PillowApiHandler(BaseHTTPRequestHandler):
                     parameters,
                 )
                 rows = cursor.fetchall()
+                attachment_ids: set[int] = set()
+                for row in rows:
+                    try:
+                        answers = json.loads(row["answers_json"])
+                    except (TypeError, json.JSONDecodeError):
+                        answers = {}
+                    if not isinstance(answers, dict):
+                        continue
+                    for answer in answers.values():
+                        if not isinstance(answer, dict):
+                            continue
+                        try:
+                            attachment_id = int(answer.get("attachmentId", 0))
+                        except (TypeError, ValueError):
+                            attachment_id = 0
+                        if attachment_id > 0:
+                            attachment_ids.add(attachment_id)
+                attachments: list[dict[str, Any]] = []
+                if attachment_ids:
+                    placeholders = ",".join(["%s"] * len(attachment_ids))
+                    cursor.execute(
+                        """
+                        SELECT a.id, a.user_id, a.questionnaire_type, a.response_date,
+                               a.attachment_key, a.content_type, a.image_data, u.username
+                        FROM questionnaire_attachments a
+                        JOIN users u ON u.id = a.user_id
+                        WHERE a.id IN (""" + placeholders + ") ORDER BY a.id",
+                        list(sorted(attachment_ids)),
+                    )
+                    selected_keys = {
+                        (int(row["user_id"]), row["questionnaire_type"], row["response_date"])
+                        for row in rows
+                    }
+                    attachments = [
+                        attachment for attachment in cursor.fetchall()
+                        if (
+                            int(attachment["user_id"]), attachment["questionnaire_type"],
+                            attachment["response_date"],
+                        ) in selected_keys
+                    ]
             if not rows:
                 self.send_json(HTTPStatus.NOT_FOUND, {"error": "No questionnaire submissions in the selected dates"})
                 return
             suffix = requested_type or "all"
-            filename = f"questionnaires_{start_day.isoformat()}_to_{end_day.isoformat()}_{suffix}.csv"
-            self.send_download("text/csv; charset=utf-8", filename, questionnaire_export_csv(rows))
+            filename = f"questionnaires_{start_day.isoformat()}_to_{end_day.isoformat()}_{suffix}_with_images.zip"
+            self.send_download("application/zip", filename, questionnaire_export_zip(rows, attachments))
             return
 
         if parsed.path == "/api/v1/admin/exports/sleep":
